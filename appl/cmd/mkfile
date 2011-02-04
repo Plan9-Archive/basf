@@ -1,0 +1,15 @@
+<../../mkconfig
+
+DIRS=\
+
+TARG=\
+	testexactus.dis\
+
+SYSMODULES=\
+	arg.m\
+	draw.m\
+	sys.m\
+
+DISBIN=$ROOT/dis/basf
+
+<$ROOT/mkfiles/mkdis

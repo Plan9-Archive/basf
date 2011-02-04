@@ -1,0 +1,6 @@
+<../mkconfig
+
+MODS=\
+	exactus.m\
+
+<mkmod
