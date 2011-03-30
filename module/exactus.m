@@ -35,7 +35,7 @@ Exactus : module
 	ERambient,
 	Emax:	con 100+iota;
 	
-	Emsg: adt {
+	Tmsg: adt {
 		tag: int;
 		pick {
 		Modbus =>

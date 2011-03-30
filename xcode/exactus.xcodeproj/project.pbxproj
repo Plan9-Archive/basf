@@ -108,6 +108,7 @@
 				GCC_OPTIMIZATION_LEVEL = 0;
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
+				PATH = "$(PATH):/usr/local/bin:/usr/inferno/MacOSX/386/bin";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				ROOT = /usr/inferno;
 			};
@@ -122,6 +123,7 @@
 				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
+				PATH = "$(PATH):/usr/local/bin:/usr/inferno/MacOSX/386/bin";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				ROOT = /usr/inferno;
 			};

@@ -53,19 +53,19 @@ init()
 open(path: string): ref Exactus->Port
 {
 	if(sys == nil) init();
-		
-		np := ref Port;
-		np.mode = Mmode;
-		np.local = path;
-		np.rdlock = Semaphore.new();
-		np.wrlock = Semaphore.new();
-		np.avail = nil;
-		np.pid = 0;
-		
-		openport(np);
-		reading(np);
-		
-		return np;
+	
+	np := ref Port;
+	np.mode = Mmode;
+	np.local = path;
+	np.rdlock = Semaphore.new();
+	np.wrlock = Semaphore.new();
+	np.avail = nil;
+	np.pid = 0;
+	
+	openport(np);
+	reading(np);
+	
+	return np;
 }
 
 # prepare device port
@@ -92,7 +92,7 @@ openport(p: ref Port)
 		} else {
 			p.ctl = sys->open(p.local+"ctl", Sys->ORDWR);
 			p.data = sys->open(p.local, Sys->ORDWR);
-			b : = array[] of { byte "b115200" };
+			b := array[] of { byte "b115200" };
 			sys->write(p.ctl, b, len b);
 		}
 	}
@@ -193,7 +193,8 @@ reader(p: ref Port, pidc: chan of int)
 			p.rdlock.obtain();
 			if(len p.avail < Sys->ATOMICIO) {
 				na := array[len p.avail + n] of byte;
-				na[0:] = p.avail[0:];
+				if(len p.avail)
+					na[0:] = p.avail[0:];
 				na[len p.avail:] = buf[0:n];
 				p.avail = na;
 			}
