@@ -14,22 +14,6 @@ lock: Lock;
 	Semaphore: import lock;
 
 
-Instruction.new(d, c: int, b: array of byte): ref Instruction
-{
-	return ref Instruction(b);
-}
-
-Instruction.bytes(inst: self ref Instruction): array of byte
-{
-#	b := array[6] of byte;
-#	b[0] = byte inst.id;
-#	b[1] = byte inst.cmd;
-#	for(i := 0; i < len inst.data; i++)
-#		b[2+i] = inst.data[i];
-#	return b;
-	return inst.data;
-}
-
 Port.write(p: self ref Port, b: array of byte): int
 {
 	r := 0;
@@ -38,6 +22,7 @@ Port.write(p: self ref Port, b: array of byte): int
 	return r;
 }
 
+stderr: ref Sys->FD;
 
 init()
 {
@@ -48,6 +33,8 @@ init()
 	if(lock == nil)
 		raise "fail: Couldn't load lock module";
 	lock->init();
+
+	stderr = sys->fildes(2);
 }
 
 open(path: string): ref Exactus->Port
@@ -55,7 +42,7 @@ open(path: string): ref Exactus->Port
 	if(sys == nil) init();
 	
 	np := ref Port;
-	np.mode = Mmode;
+	np.mode = ModeModbus;
 	np.local = path;
 	np.rdlock = Semaphore.new();
 	np.wrlock = Semaphore.new();
@@ -63,7 +50,8 @@ open(path: string): ref Exactus->Port
 	np.pid = 0;
 	
 	openport(np);
-	reading(np);
+	if(np.data != nil);
+		reading(np);
 	
 	return np;
 }
@@ -100,8 +88,6 @@ openport(p: ref Port)
 		raise "fail: file does not exist";
 		return;
 	}
-	
-	p.write(ECmodbus);
 }
 
 # shut down reader (if any)
@@ -122,7 +108,7 @@ close(p: ref Port): ref Sys->Connection
 	return c;
 }
 
-getreply(p: ref Port, n: int): array of ref Instruction
+getreply(p: ref Port, n: int): array of ref ERmsg
 {
 	if(p==nil || n <= 0)
 		return nil;
@@ -137,9 +123,9 @@ getreply(p: ref Port, n: int): array of ref Instruction
 	}
 	p.rdlock.release();
 	
-	a : array of ref Instruction;
+	a : array of ref ERmsg;
 	if(len b) {
-		a = array[n] of { * => ref Instruction};
+		a = array[n] of { * => ref ERmsg};
 #		for(j:=0; j<n; j++) {
 #			i := a[j];
 #			i.id = int(b[(j*6)]);
@@ -151,13 +137,13 @@ getreply(p: ref Port, n: int): array of ref Instruction
 }
 
 # read until timeout or result is returned
-readreply(p: ref Port, ms: int): ref Instruction
+readreply(p: ref Port, ms: int): ref ERmsg
 {
 	if(p == nil)
 		return nil;
 	
 	limit := 60000;			# arbitrary maximum of 60s
-	r : ref Instruction;
+	r : ref ERmsg;
 	for(start := sys->millisec(); sys->millisec() <= start+ms;) {
 		a := getreply(p, 1);
 		if(len a == 0) {
@@ -200,6 +186,7 @@ reader(p: ref Port, pidc: chan of int)
 			}
 			p.rdlock.release();
 		}
+		sys->fprint(stderr, "reader closed\n");
 		# error, try again
 		p.data = nil;
 		p.ctl = nil;
