@@ -2,77 +2,94 @@ implement TestExactus;
 
 include "sys.m";
 include "draw.m";
+include "arg.m";
 include "lock.m";
+include "string.m";
 
 include "exactus.m";
 
 sys: Sys;
-draw: Draw;
+str: String;
 
 exactus: Exactus;
-	Instruction, Port: import exactus;
+	ERmsg, Port: import exactus;
 
 TestExactus: module {
 	init: fn(ctxt: ref Draw->Context, argv: list of string);
 };
 
-init(ctxt: ref Draw->Context, nil: list of string)
+stdin, stdout, stderr: ref Sys->FD;
+
+port: ref Port;
+
+init(nil: ref Draw->Context, argv: list of string)
 {
 	sys = load Sys Sys->PATH;
+	str = load String String->PATH;
 	
+	stderr = sys->fildes(2);
+	stdout = sys->fildes(1);
+	stdin = sys->fildes(0);
+
 	exactus = load Exactus Exactus->PATH;
 	exactus->init();
 	
-#	tls := exactus->open("/dev/eia0");
-
-	rfd := sys->open("/dev/eia0", Sys->OREAD);
-	wfd := sys->open("/dev/eia0", Sys->OWRITE);
+	path := "tcp!iolan!exactus";
+	skip := 0;
 	
-	b := array[] of {
-		byte 16r01, byte 16r05, byte 16r00, byte 16r13, byte 16r00, byte 16r00,
-		byte 16r3c, byte 16r0f
-		};
-	sys->write(wfd, b, len b);
+	arg := load Arg Arg->PATH;
+	arg->init(argv);
+	arg->setusage(arg->progname()+" [-s] [path]");
+	while((c := arg->opt()) != 0)
+		case c {
+		's' =>	skip++;
+		* =>	arg->usage();
+		}
 	
-	b = array[] of {
-		byte 16r02, byte 16r56, byte 16r56, byte 16r03
-	};
-	sys->write(wfd, b, len b);
+	argv = arg->argv();
+	if(argv != nil)
+		path = hd argv;
 	
-	buf := array[1] of byte;
-	while (1) {
-		sys->read(rfd, buf, len buf);
-		dump(buf);
+	if(path != nil && skip == 0) {
+		port = exactus->open(path);
+		if(port.ctl == nil || port.data == nil) {
+			sys->fprint(stderr, "Failed to connect to %s\n", port.path);
+			exit;
+		}
 	}
-#	write(tls, b);
-#	read(tls);
-#	read(tls);
-#	read(tls);
-#	read(tls);
-#	
-#	exactus->close(tls);
+	
+	testdata();
+
+	if(port != nil && skip == 0)
+		testnetwork(port);
+	
+	if(port != nil)
+		exactus->close(port);
 }
 
-read(p: ref Exactus->Port): ref Exactus->Instruction
+testnetwork(p: ref Exactus->Port)
 {
-	r := exactus->readreply(p, 100);
-	if(r != nil)
-		sys->print("RX <- %s\n", dump(r.bytes()));
-		return r;
-	return r;
 }
 
-write(p: ref Exactus->Port, b: array of byte)
+testdata()
 {
-	sys->print("TX -> %s\n", dump(b));
-	p.write(b);
+	b := array[] of {byte 16r44, byte 16r45, byte 16r00, byte 16r42, byte 16rC8,
+					 byte 16r00, byte 16r00, byte 16r3F, byte 16r66, byte 16r66,
+					 byte 16r66, byte 16r3F, byte 16r00, byte 16r00, byte 16r00};
+	
+	sys->fprint(stdout, "LRC of:%s\n", hexdump(b));
+	sys->fprint(stdout, "LRC ==\t%0X\n", int exactus->lrc(b));
 }
 
-dump(b: array of byte): string
+
+hexdump(b: array of byte): string
 {
 	s := "";
-	for(i:=0; i<len b; i++)
+	for(i:=0; i<len b; i++) {
+		if(i%8 == 0)
+			s = s + "\n\t";
 		s = sys->sprint("%s %02X", s, int(b[i]));
-		s = sys->sprint("%s %s", s, string(b[2:]));
-		return s;
+	}
+	
+	return str->drop(s, "\n");
 }

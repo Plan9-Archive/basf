@@ -22,6 +22,12 @@ Port.write(p: self ref Port, b: array of byte): int
 	return r;
 }
 
+ERmsg.pack(m: self ref ERmsg): array of byte
+{
+	sys->fprint(stderr, "not complete\n");
+	return m.data;
+}
+
 stderr: ref Sys->FD;
 
 init()
@@ -43,7 +49,7 @@ open(path: string): ref Exactus->Port
 	
 	np := ref Port;
 	np.mode = ModeModbus;
-	np.local = path;
+	np.path = path;
 	np.rdlock = Semaphore.new();
 	np.wrlock = Semaphore.new();
 	np.avail = nil;
@@ -67,19 +73,19 @@ openport(p: ref Port)
 	p.data = nil;
 	p.ctl = nil;
 	
-	if(p.local != nil) {
-		if(str->in('!', p.local)) {
-			(ok, net) := sys->dial(p.local, nil);
+	if(p.path != nil) {
+		if(str->in('!', p.path)) {
+			(ok, net) := sys->dial(p.path, nil);
 			if(ok == -1) {
-				raise "can't open "+p.local;
+				raise "can't open "+p.path;
 				return;
 			}
 			
 			p.ctl = sys->open(net.dir+"/ctl", Sys->ORDWR);
 			p.data = sys->open(net.dir+"/data", Sys->ORDWR);
 		} else {
-			p.ctl = sys->open(p.local+"ctl", Sys->ORDWR);
-			p.data = sys->open(p.local, Sys->ORDWR);
+			p.ctl = sys->open(p.path+"ctl", Sys->ORDWR);
+			p.data = sys->open(p.path, Sys->ORDWR);
 			b := array[] of { byte "b115200" };
 			sys->write(p.ctl, b, len b);
 		}
@@ -105,7 +111,25 @@ close(p: ref Port): ref Sys->Connection
 	c := ref sys->Connection(p.data, p.ctl, nil);
 	p.ctl = nil;
 	p.data = nil;
+	
+	hangup := array[] of {byte "hangup"};
+	sys->write(p.ctl, hangup, len hangup);
+	
 	return c;
+}
+
+# Exactus mode LRC Calculation
+lrc(buf: array of byte): byte
+{
+	r := byte 0;
+	n := len buf;
+	if (n > 0)
+		r = buf[0];
+		
+	for (i := 1; i < n; i++)
+		r ^= buf[i];
+	
+	return r;
 }
 
 getreply(p: ref Port, n: int): array of ref ERmsg

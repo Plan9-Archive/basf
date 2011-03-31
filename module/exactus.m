@@ -35,7 +35,7 @@ Exactus : module
 	{
 		mode:	int;
 
-		local:	string;
+		path:	string;
 		ctl:	ref Sys->FD;
 		data:	ref Sys->FD;
 		
@@ -51,12 +51,17 @@ Exactus : module
 	
 	ERmsg: adt {
 		mode: int;
+		data: array of byte;
+		
+		pack:	fn(m: self ref ERmsg): array of byte;
 	};
 	
 	init:	fn();
 	
 	open:	fn(path: string): ref Exactus->Port;
 	close:		fn(p: ref Port): ref Sys->Connection;
+	
+	lrc:	fn(buf: array of byte): byte;
 	
 	getreply:	fn(p: ref Port, n: int): array of ref ERmsg;
 	readreply:	fn(p: ref Port, ms: int): ref ERmsg;
