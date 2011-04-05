@@ -1,6 +1,6 @@
 # BASF Exactus(R) Pyromemeter
 #
-# Copyright (C) 2011, Corpus Callosum Corporation.  All Rights Reserverd.
+# Copyright (C) 2011, Corpus Callosum Corporation.  All Rights Reserved.
 
 Exactus : module
 {
@@ -16,11 +16,20 @@ Exactus : module
 	ModeModbus,							# Modbus mode
 	ModeMax:	con iota;
 	
+	Texactus,
+	Rexactus,
+	Tmodbus,
+	Rmodbus,
+	Tmax:	con 100+iota;
+	
 	# Exactus Data Messages
 	ERtemperature,
 	ERcurrent,
 	ERdual,
 	ERdevice,
+	ERstx,
+	ERack,
+	ERnak,
 	Emax:	con 100+iota;
 	
 	# Exactus host to Pyrometer commands
@@ -47,13 +56,41 @@ Exactus : module
 		pid:	int;
 		
 		write: fn(p: self ref Port, b: array of byte): int;
+		
+		getreply:	fn(p: self ref Port): (ref ERmsg, string);
+		readreply:	fn(p: self ref Port, ms: int): (ref ERmsg, string);
+	};
+	
+	ETmsg: adt {
+		pick {
+		Readerror =>
+			error:	string;
+		ExactusMsg =>
+			rtype:	int;
+			data:	array of byte;
+		ModbusMsg =>
+			addr:	byte;
+			msg:	ref Modbus->TMmsg;
+			crc:	int;
+		}
+		
+		packedsize:	fn(nil: self ref ETmsg): int;
+		pack:	fn(nil: self ref ETmsg): array of byte;
 	};
 	
 	ERmsg: adt {
-		mode: int;
-		data: array of byte;
+		pick {
+		Readerror =>
+			error:	string;
+		ExactusMsg =>
+			rtype:	int;
+			data: array of byte;
+		ModbusMsg =>
+			msg:	ref Modbus->RMmsg;
+		}
 		
-		pack:	fn(m: self ref ERmsg): array of byte;
+		packedsize:	fn(nil: self ref ERmsg): int;
+		pack:	fn(nil: self ref ERmsg): array of byte;
 	};
 	
 	init:	fn();
@@ -62,7 +99,5 @@ Exactus : module
 	close:		fn(p: ref Port): ref Sys->Connection;
 	
 	lrc:	fn(buf: array of byte): byte;
-	
-	getreply:	fn(p: ref Port, n: int): array of ref ERmsg;
-	readreply:	fn(p: ref Port, ms: int): ref ERmsg;
+	ieee754:	fn(b: array of byte): real;
 };

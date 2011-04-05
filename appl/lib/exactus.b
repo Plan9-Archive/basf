@@ -2,31 +2,22 @@ implement Exactus;
 
 include "sys.m";
 include "dial.m";
+include "math.m";
 include "lock.m";
 include "string.m";
 
+include "modbus.m";
 include "exactus.m";
 
 sys: Sys;
 dial: Dial;
+math: Math;
 str: String;
 lock: Lock;
 	Semaphore: import lock;
 
-
-Port.write(p: self ref Port, b: array of byte): int
-{
-	r := 0;
-	p.wrlock.obtain();
-	r = sys->write(p.data, b, len b);
-	return r;
-}
-
-ERmsg.pack(m: self ref ERmsg): array of byte
-{
-	sys->fprint(stderr, "not complete\n");
-	return m.data;
-}
+modbus: Modbus;
+	RMmsg, TMmsg: import modbus;
 
 stderr: ref Sys->FD;
 
@@ -34,14 +25,141 @@ init()
 {
 	sys = load Sys Sys->PATH;
 	dial = load Dial Dial->PATH;
+	math = load Math Math->PATH;
 	str = load String String->PATH;
 	lock = load Lock Lock->PATH;
 	if(lock == nil)
 		raise "fail: Couldn't load lock module";
 	lock->init();
 
+	modbus = load Modbus Modbus->PATH;
+	modbus->init();
+	
 	stderr = sys->fildes(2);
 }
+
+Port.write(p: self ref Port, b: array of byte): int
+{
+	r := 0;
+	if(b != nil && len b > 0) {
+		p.wrlock.obtain();
+		if(p.mode == ModeModbus)
+			sys->sleep(5);	# more than 3.5 char times a byte at 115.2kb
+		r = sys->write(p.data, b, len b);
+		p.wrlock.release();
+	}
+	return r;
+}
+
+Port.getreply(p: self ref Port): (ref ERmsg, string)
+{
+	r : ref ERmsg;
+	err : string;
+	
+	if(p==nil)
+		return (r, "No valid port");
+	
+	p.rdlock.obtain();
+	n := len p.avail;
+	if(n > 0) {
+		if(p.mode == Exactus->ModeExactus) {
+		}
+		if(p.mode == Exactus->ModeModbus) {
+			if(n >= 4) {
+				(o, m) := RMmsg.unpack(p.avail, Modbus->FrameRTU);
+				if(m != nil) {
+					pick x := m {
+					Readerror =>
+						err = x.error;
+						r = ref ERmsg.Readerror(err);
+					* =>
+						r = ref ERmsg.ModbusMsg(m);
+					}
+					p.avail = p.avail[o:];
+				}
+			}
+		}
+	}
+	p.rdlock.release();
+	
+	return (r, err);
+}
+
+# read until timeout or result is returned
+Port.readreply(p: self ref Port, ms: int): (ref ERmsg, string)
+{
+	if(p == nil)
+		return (nil, "No valid port");
+	
+	limit := 60000;			# arbitrary maximum of 60s
+	r : ref ERmsg;
+	err : string;
+	for(start := sys->millisec(); sys->millisec() <= start+ms;) {
+		(r, err) = p.getreply();
+		if(r == nil) {
+			if(limit--) {
+				sys->sleep(5);
+				continue;
+			}
+			break;
+		} else
+			break;
+	}
+	
+	return (r, err);
+}
+
+ttag2type := array[] of {
+tagof ETmsg.Readerror => 0,
+tagof ETmsg.ExactusMsg => Texactus,
+tagof ETmsg.ModbusMsg => Tmodbus,
+};
+
+ETmsg.packedsize(t: self ref ETmsg): int
+{
+	n := 0;
+	pick x := t {
+	ExactusMsg => n = 0;
+	ModbusMsg => n = x.msg.packedsize();
+	}
+	return n;
+}
+
+ETmsg.pack(t: self ref ETmsg): array of byte
+{
+	b : array of byte;
+	if(t != nil && t.packedsize()) {
+		pick x := t {
+		ExactusMsg => b = nil;
+		ModbusMsg => b = x.msg.pack();
+		}
+	}
+	return b;
+}
+
+
+ERmsg.packedsize(t: self ref ERmsg): int
+{
+	n := 0;
+	pick x := t {
+	ExactusMsg => n = 0;
+	ModbusMsg => n = x.msg.packedsize();
+	}
+	return n;
+}
+
+ERmsg.pack(t: self ref ERmsg): array of byte
+{
+	b : array of byte;
+	if(t != nil && t.packedsize()) {
+		pick x := t {
+		ExactusMsg => b = nil;
+		ModbusMsg => b = x.msg.pack();
+		}
+	}
+	return b;
+}
+
 
 open(path: string): ref Exactus->Port
 {
@@ -94,6 +212,11 @@ openport(p: ref Port)
 		raise "fail: file does not exist";
 		return;
 	}
+	
+	b := array[] of {
+		byte 16r02, byte 16r4d, byte 16r4d, byte 16r03,
+	};
+	p.write(b);
 }
 
 # shut down reader (if any)
@@ -117,72 +240,6 @@ close(p: ref Port): ref Sys->Connection
 	
 	return c;
 }
-
-# Exactus mode LRC Calculation
-lrc(buf: array of byte): byte
-{
-	r := byte 0;
-	n := len buf;
-	if (n > 0)
-		r = buf[0];
-		
-	for (i := 1; i < n; i++)
-		r ^= buf[i];
-	
-	return r;
-}
-
-getreply(p: ref Port, n: int): array of ref ERmsg
-{
-	if(p==nil || n <= 0)
-		return nil;
-	
-	b : array of byte;
-	p.rdlock.obtain();
-	if(len p.avail != 0) {
-		if((n*6) > len p.avail)
-			n = len p.avail / 6;
-		b = p.avail[0:(n*6)];
-		p.avail = p.avail[(n*6):];
-	}
-	p.rdlock.release();
-	
-	a : array of ref ERmsg;
-	if(len b) {
-		a = array[n] of { * => ref ERmsg};
-#		for(j:=0; j<n; j++) {
-#			i := a[j];
-#			i.id = int(b[(j*6)]);
-#			i.cmd = int(b[(j*6)+1]);
-#			i.data = b[(j*6)+2:(j*6)+6];
-#		}
-	}
-	return a;
-}
-
-# read until timeout or result is returned
-readreply(p: ref Port, ms: int): ref ERmsg
-{
-	if(p == nil)
-		return nil;
-	
-	limit := 60000;			# arbitrary maximum of 60s
-	r : ref ERmsg;
-	for(start := sys->millisec(); sys->millisec() <= start+ms;) {
-		a := getreply(p, 1);
-		if(len a == 0) {
-			if(limit--) {
-				sys->sleep(1);
-				continue;
-			}
-			break;
-		}
-		return a[0];
-	}
-	
-	return r;
-}
-
 
 reading(p: ref Port)
 {
@@ -218,6 +275,31 @@ reader(p: ref Port, pidc: chan of int)
 	}
 }
 
+# Exactus mode LRC Calculation
+lrc(buf: array of byte): byte
+{
+	r := byte 0;
+	n := len buf;
+	if (n > 0)
+		r = buf[0];
+		
+	for (i := 1; i < n; i++)
+		r ^= buf[i];
+	
+	return r;
+}
+
+ieee754(b: array of byte): real
+{
+	r := Math->NaN;
+	if(len b == 4) {
+		x := array[1] of real;
+		math->import_real32(b, x);
+		r = x[0];
+	}
+	return r;
+}
+
 # support fn
 b2i(b: array of byte): int
 {
@@ -239,6 +321,18 @@ i2b(i: int): array of byte
 	b[2] = byte(i>>16);
 	b[3] = byte(i>>24);
 	return b;
+}
+
+hexdump(b: array of byte): string
+{
+	s := "";
+	for(i:=0; i<len b; i++) {
+		if(i%8 == 0)
+			s = s + "\n\t";
+		s = sys->sprint("%s %02X", s, int(b[i]));
+	}
+	
+	return str->drop(s, "\n");
 }
 
 # convenience
