@@ -20,6 +20,7 @@ modbus: Modbus;
 	RMmsg, TMmsg: import modbus;
 
 stderr: ref Sys->FD;
+debug := 0;
 
 init()
 {
@@ -51,13 +52,14 @@ Port.write(p: self ref Port, b: array of byte): int
 	return r;
 }
 
-Port.getreply(p: self ref Port): (ref ERmsg, string)
+Port.getreply(p: self ref Port): (ref ERmsg, array of byte, string)
 {
 	r : ref ERmsg;
+	b : array of byte;
 	err : string;
 	
 	if(p==nil)
-		return (r, "No valid port");
+		return (r, b, "No valid port");
 	
 	p.rdlock.obtain();
 	n := len p.avail;
@@ -75,6 +77,7 @@ Port.getreply(p: self ref Port): (ref ERmsg, string)
 					* =>
 						r = ref ERmsg.ModbusMsg(m);
 					}
+					b = p.avail[0:o];
 					p.avail = p.avail[o:];
 				}
 			}
@@ -82,20 +85,21 @@ Port.getreply(p: self ref Port): (ref ERmsg, string)
 	}
 	p.rdlock.release();
 	
-	return (r, err);
+	return (r, b, err);
 }
 
 # read until timeout or result is returned
-Port.readreply(p: self ref Port, ms: int): (ref ERmsg, string)
+Port.readreply(p: self ref Port, ms: int): (ref ERmsg, array of byte, string)
 {
 	if(p == nil)
-		return (nil, "No valid port");
+		return (nil, nil, "No valid port");
 	
 	limit := 60000;			# arbitrary maximum of 60s
 	r : ref ERmsg;
+	b : array of byte;
 	err : string;
 	for(start := sys->millisec(); sys->millisec() <= start+ms;) {
-		(r, err) = p.getreply();
+		(r, b, err) = p.getreply();
 		if(r == nil) {
 			if(limit--) {
 				sys->sleep(5);
@@ -106,7 +110,7 @@ Port.readreply(p: self ref Port, ms: int): (ref ERmsg, string)
 			break;
 	}
 	
-	return (r, err);
+	return (r, b, err);
 }
 
 ttag2type := array[] of {
@@ -137,6 +141,17 @@ ETmsg.pack(t: self ref ETmsg): array of byte
 	return b;
 }
 
+ETmsg.dtype(t: self ref ETmsg): (array of byte, ref Modbus->TMmsg)
+{
+	b : array of byte;
+	m : ref Modbus->TMmsg;
+	pick x := t {
+	ExactusMsg => b = x.data;
+	ModbusMsg => m = x.msg;
+	}
+	return (b, m);
+}
+
 
 ERmsg.packedsize(t: self ref ERmsg): int
 {
@@ -160,6 +175,16 @@ ERmsg.pack(t: self ref ERmsg): array of byte
 	return b;
 }
 
+ERmsg.dtype(t: self ref ERmsg): (array of byte, ref Modbus->RMmsg)
+{
+	b : array of byte;
+	m : ref Modbus->RMmsg;
+	pick x := t {
+	ExactusMsg => b = x.data;
+	ModbusMsg => m = x.msg;
+	}
+	return (b, m);
+}
 
 open(path: string): ref Exactus->Port
 {
@@ -267,8 +292,7 @@ reader(p: ref Port, pidc: chan of int)
 			}
 			p.rdlock.release();
 		}
-		sys->fprint(stderr, "reader closed\n");
-		# error, try again
+		sys->fprint(stderr, "Exactus reader closed, trying again.\n");
 		p.data = nil;
 		p.ctl = nil;
 		openport(p);

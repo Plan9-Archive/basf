@@ -110,29 +110,84 @@ testdata()
 testnetwork(p: ref Exactus->Port)
 {
 	m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1305, 16r0009);
-	test(p, m.pack(), "read (0x1305) Serial number (9 ASCII bytes)");
+	r := test(p, m.pack(), "read (0x1305) Serial number (9 ASCII bytes)");
 	purge(p);
+	(e, mt) := r.dtype();
+	if(mt != nil) {
+		sys->fprint(stdout, "Text: %s\n", mt.text());
+		pick x := mt {
+		Readholdingregisters =>
+			d := x.data;
+			n := len d;
+			sys->fprint(stdout, "\t%d %d\n%s\n", n, int d[1], hexdump(d));
+			s := array[n] of { * => byte 0};
+			j := 0;
+			for(i := 0; i < n; i=i+2) {
+				c := d[i+1];
+				if(c == byte 0 || c > byte 16r7f)
+					break;
+				s[j++] = c;
+			}
+			sys->fprint(stdout, "\t%s\n", string s);
+		}
+	}
+	
+	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r0000, 16r0002);
+	r = test(port, m.pack(), "read (0x0000) channel 1 temperature");
+	purge(port);
+	(e, mt) = r.dtype();
+	if(mt != nil) {
+		sys->fprint(stdout, "Text: %s\n", mt.text());
+		sys->fprint(stdout, "\t%g\n", mdata(mt, 0));
+	}
+
+	bytes : array of byte;
+	err : string;
+	start := sys->millisec();
+	for(i := 0; i < 100; i++) {
+		m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r0004, 16r0004);
+		port.write(m.pack());
+		(r, bytes, err) = port.readreply(125);
+		ms := sys->millisec();
+		(e, mt) = r.dtype();
+		sys->fprint(stdout, "%04d: %0.2f°C\t%g Amps\n", ms-start, mdata(mt, 4), mdata(mt, 0));
+	}
 }
 
-test(p: ref Port,b: array of byte, s: string)
+mdata(m: ref Modbus->RMmsg, n: int): real
 {
+	r : real;
+	pick x := m {
+	Readholdingregisters =>
+		if(len x.data >= n+4)
+			r = exactus->ieee754(x.data[n:n+4]);
+	}
+	return r;
+}
+
+test(p: ref Port, b: array of byte, s: string): ref ERmsg
+{
+	r : ref ERmsg;
 	if(p != nil) {
+		bytes : array of byte;
+		err : string;
+		
 		sys->fprint(stdout, "\nTest: %s\n", s);
 		start := sys->millisec();
 		n := p.write(b);
 		stop := sys->millisec();
-		sys->fprint(stdout, "TX -> %s\t(%d, %d)\n", hexdump(b), n, stop-start);
+		sys->fprint(stderr, "TX -> %s\t(%d, %d)\n", hexdump(b), n, stop-start);
 
-		(r, err) := p.readreply(500);
+		(r, bytes, err) = p.readreply(500);
+		p.rdlock.obtain();
+		sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+		p.rdlock.release();
 		if(r != nil) {
 			buf := r.pack();
-			sys->fprint(stdout, "reply: %s\n", hexdump(buf));
-		} else {
-			p.rdlock.obtain();
-			sys->fprint(stdout, "RX <- %s\n", hexdump(p.avail));
-			p.rdlock.release();
+			sys->fprint(stderr, "reply: %s\n", hexdump(buf));
 		}
 	}
+	return r;
 }
 
 hexdump(b: array of byte): string

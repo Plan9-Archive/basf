@@ -57,8 +57,8 @@ Exactus : module
 		
 		write: fn(p: self ref Port, b: array of byte): int;
 		
-		getreply:	fn(p: self ref Port): (ref ERmsg, string);
-		readreply:	fn(p: self ref Port, ms: int): (ref ERmsg, string);
+		getreply:	fn(p: self ref Port): (ref ERmsg, array of byte, string);
+		readreply:	fn(p: self ref Port, ms: int): (ref ERmsg, array of byte, string);
 	};
 	
 	ETmsg: adt {
@@ -76,6 +76,8 @@ Exactus : module
 		
 		packedsize:	fn(nil: self ref ETmsg): int;
 		pack:	fn(nil: self ref ETmsg): array of byte;
+		
+		dtype:	fn(nil: self ref ETmsg): (array of byte, ref Modbus->TMmsg);
 	};
 	
 	ERmsg: adt {
@@ -91,6 +93,8 @@ Exactus : module
 		
 		packedsize:	fn(nil: self ref ERmsg): int;
 		pack:	fn(nil: self ref ERmsg): array of byte;
+		
+		dtype:	fn(nil: self ref ERmsg): (array of byte, ref Modbus->RMmsg);
 	};
 	
 	init:	fn();
