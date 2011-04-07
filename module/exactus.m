@@ -102,6 +102,8 @@ Exactus : module
 	open:	fn(path: string): ref Exactus->Port;
 	close:		fn(p: ref Port): ref Sys->Connection;
 	
+	swapendian:	fn(b: array of byte): array of byte;
+
 	lrc:	fn(buf: array of byte): byte;
 	ieee754:	fn(b: array of byte): real;
 };

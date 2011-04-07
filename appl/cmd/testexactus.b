@@ -105,6 +105,21 @@ testdata()
 	math->import_real32(b, x);
 	sys->fprint(stdout, "  result: %g\n", x[0]);
 	sys->fprint(stdout, " ieee754: %g\n", exactus->ieee754(b));
+	
+	b = array[] of {byte 16r00, byte 16re0, byte 16r22, byte 16r44};
+	sys->fprint(stdout, "Content demo:\n%s (651.5)\n", hexdump(b));
+	sys->fprint(stdout, "\t%g\n", exactus->ieee754(b));
+	b = array[] of {byte 16r44, byte 16r22, byte 16re0, byte 16r00};
+	sys->fprint(stdout, "%s (%g)\n", hexdump(b), exactus->ieee754(b));
+	b = exactus->swapendian(b);
+	sys->fprint(stdout, "%s (%g)\n", hexdump(b), exactus->ieee754(b));
+	b = exactus->swapendian(b);
+
+	r := exactus->ieee754(b);
+	x[0] = r;
+	b = array[4] of { * => byte 0 };
+	math->export_real32(b, x);
+	sys->fprint(stdout, "real cmp: %g =? %g\n", r, x[0]);
 }
 
 testnetwork(p: ref Exactus->Port)

@@ -316,15 +316,28 @@ lrc(buf: array of byte): byte
 ieee754(b: array of byte): real
 {
 	r := Math->NaN;
-	if(len b == 4) {
+	if(len b >= 4) {
 		x := array[1] of real;
-		math->import_real32(b, x);
+		math->import_real32(b[0:4], x);
 		r = x[0];
 	}
 	return r;
 }
 
 # support fn
+swapendian(b: array of byte): array of byte
+{
+	nb : array of byte;
+	if(len b >= 4) {
+		nb = array[4] of byte;
+		nb[0] = b[3];
+		nb[1] = b[2];
+		nb[2] = b[1];
+		nb[3] = b[0];
+	}
+	return nb;
+}
+
 b2i(b: array of byte): int
 {
 	i := 0;
