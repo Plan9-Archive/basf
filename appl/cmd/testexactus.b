@@ -122,9 +122,9 @@ testdata()
 	sys->fprint(stdout, "real cmp: %g =? %g\n", r, x[0]);
 	
 	sys->fprint(stdout, "Test Trecord:\n");
-	t := ref Exactus->Trecord(big 0, 651.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+	t := ref Exactus->Trecord(0, 651.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 	sys->fprint(stdout, "%s\n", hexdump(t.pack()));
-	t = ref Exactus->Trecord(big 200, 651.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+	t = ref Exactus->Trecord(200, 651.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 	sys->fprint(stdout, "%s\n", hexdump(t.pack()));
 }
 

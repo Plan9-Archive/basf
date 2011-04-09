@@ -38,6 +38,27 @@ Exactus : module
 	ECsetcal,
 	ECmax:	con 48+iota;
 	
+	# Exactus mode graph rate
+	GR1000,
+	GR500,
+	GR200,
+	GR100,
+	GR50,
+	GR20,
+	GR10,
+	GR8,
+	GR6,
+	GR5,
+	GR4,
+	GR3,
+	GR2,
+	GR1,
+	GR0d5,
+	GR0d2,
+	GR0d1,
+	GR1o30,
+	GR1o60:		con byte iota;
+	
 	Port: adt
 	{
 		mode:	int;
@@ -114,7 +135,7 @@ Exactus : module
 	
 	# TemperaSure binary data record
 	Trecord: adt {
-		time: big;			# saved as 32-bit unsigned int
+		time: int;
 		temp0:	real;
 		temp1:	real;
 		temp2:	real;
