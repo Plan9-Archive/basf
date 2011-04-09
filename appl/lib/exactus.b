@@ -42,7 +42,7 @@ init()
 Port.write(p: self ref Port, b: array of byte): int
 {
 	r := 0;
-	if(b != nil && len b > 0) {
+	if(p != nil && p.data != nil && b != nil && len b > 0) {
 		p.wrlock.obtain();
 		if(p.mode == ModeModbus)
 			sys->sleep(5);	# more than 3.5 char times a byte at 115.2kb
@@ -65,6 +65,10 @@ Port.getreply(p: self ref Port): (ref ERmsg, array of byte, string)
 	n := len p.avail;
 	if(n > 0) {
 		if(p.mode == Exactus->ModeExactus) {
+			(o, m) := Emsg.unpack(p.avail);
+			if(m != nil)
+				r = ref ERmsg.ExactusMsg(m);
+			p.avail = p.avail[o:];
 		}
 		if(p.mode == Exactus->ModeModbus) {
 			if(n >= 4) {
@@ -113,6 +117,28 @@ Port.readreply(p: self ref Port, ms: int): (ref ERmsg, array of byte, string)
 	return (r, b, err);
 }
 
+Emsg.unpack(b: array of byte): (int, ref Emsg)
+{
+	i := 0;
+	m : ref Emsg;
+	if(b != nil && len b > 0) {
+		case int b[0] {
+		# Temperature =>
+			
+		int ACK or int NAK =>
+			m = ref Emsg.Acknowledge(b[0]);
+			i++;
+		}
+	}
+	return (i, m);
+}
+
+descape(b: array of byte): array of byte
+{
+	nb : array of byte;
+	return nb;
+}
+
 ttag2type := array[] of {
 tagof ETmsg.Readerror => 0,
 tagof ETmsg.ExactusMsg => Texactus,
@@ -141,15 +167,16 @@ ETmsg.pack(t: self ref ETmsg): array of byte
 	return b;
 }
 
-ETmsg.dtype(t: self ref ETmsg): (array of byte, ref Modbus->TMmsg)
+ETmsg.dtype(t: self ref ETmsg): (ref Emsg, ref Modbus->TMmsg)
 {
-	b : array of byte;
+	e : ref Emsg;
 	m : ref Modbus->TMmsg;
-	pick x := t {
-	ExactusMsg => b = x.data;
-	ModbusMsg => m = x.msg;
-	}
-	return (b, m);
+	if(t != nil)
+		pick x := t {
+		ExactusMsg => e = x.msg;
+		ModbusMsg => m = x.msg;
+		}
+	return (e, m);
 }
 
 
@@ -175,16 +202,91 @@ ERmsg.pack(t: self ref ERmsg): array of byte
 	return b;
 }
 
-ERmsg.dtype(t: self ref ERmsg): (array of byte, ref Modbus->RMmsg)
+ERmsg.dtype(t: self ref ERmsg): (ref Emsg, ref Modbus->RMmsg)
 {
-	b : array of byte;
+	e : ref Emsg;
 	m : ref Modbus->RMmsg;
-	pick x := t {
-	ExactusMsg => b = x.data;
-	ModbusMsg => m = x.msg;
-	}
-	return (b, m);
+	if(t != nil)
+		pick x := t {
+		ExactusMsg => e = x.msg;
+		ModbusMsg => m = x.msg;
+		}
+	return (e, m);
 }
+
+Trecord.pack(t: self ref Trecord): array of byte
+{
+	b := array[36] of { * => byte 0};
+	v : array of byte;
+	# timestamp
+	v = i2b(int t.time);
+	b[0] = v[0];
+	b[1] = v[1];
+	b[2] = v[2];
+	b[3] = v[3];
+	# temperature 0
+	v = lpackr(t.temp0);
+	b[4] = v[0];
+	b[5] = v[1];
+	b[6] = v[2];
+	b[7] = v[3];
+	if(0) {						# no need to archive the rest
+	# temperature 1
+	v = lpackr(t.temp1);
+	b[8] = v[0];
+	b[9] = v[1];
+	b[10] = v[2];
+	b[11] = v[3];
+	# temperatue 2
+	v = lpackr(t.temp2);
+	b[12] = v[0];
+	b[13] = v[1];
+	b[14] = v[2];
+	b[15] = v[3];
+	# current 1
+	v = lpackr(t.current1);
+	b[16] = v[0];
+	b[17] = v[1];
+	b[18] = v[2];
+	b[19] = v[3];
+	# current 2
+	v = lpackr(t.current2);
+	b[20] = v[0];
+	b[21] = v[1];
+	b[22] = v[2];
+	b[23] = v[3];
+	# electronics temp 1
+	v = lpackr(t.etemp1);
+	b[24] = v[0];
+	b[25] = v[1];
+	b[26] = v[2];
+	b[27] = v[3];
+	# electronics temp 2
+	v = lpackr(t.etemp2);
+	b[28] = v[0];
+	b[29] = v[1];
+	b[30] = v[2];
+	b[31] = v[3];
+	# emissivity
+	v = lpackr(t.emissivity);
+	b[32] = v[0];
+	b[33] = v[1];
+	b[34] = v[2];
+	b[35] = v[3];
+	}
+	return b;
+}
+
+lpackr(r: real): array of byte
+{
+	b := array[4] of byte;
+	x := array[1] of real;
+	x[0] = r;
+	math->export_real32(b, x);
+	return swapendian(b);
+}
+
+
 
 open(path: string): ref Exactus->Port
 {
@@ -237,11 +339,7 @@ openport(p: ref Port)
 		raise "fail: file does not exist";
 		return;
 	}
-	
-	b := array[] of {
-		byte 16r02, byte 16r4d, byte 16r4d, byte 16r03,
-	};
-	p.write(b);
+	switchmodbus(p);
 }
 
 # shut down reader (if any)
@@ -264,6 +362,33 @@ close(p: ref Port): ref Sys->Connection
 	sys->write(p.ctl, hangup, len hangup);
 	
 	return c;
+}
+
+readreply(p: ref Port, ms: int): (ref ERmsg, array of byte, string)
+{
+	return p.readreply(ms);
+}
+
+write(p: ref Port, b: array of byte): int
+{
+	return p.write(b);
+}
+
+
+switchexactus(p: ref Port, addr: int)
+{
+	m := ref TMmsg.Writecoil(Modbus->FrameRTU, addr, -1, 16r0013, 16r0000);
+	p.write(m.pack());
+}
+
+switchmodbus(p: ref Port)
+{
+	if(p != nil) {
+		b := array[] of {
+			byte 16r02, byte 16r4d, byte 16r4d, byte 16r03,
+		};
+		p.write(b);
+	}
 }
 
 reading(p: ref Port)

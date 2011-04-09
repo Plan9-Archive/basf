@@ -20,7 +20,7 @@ modbus: Modbus;
 	TMmsg, RMmsg: import modbus;
 
 exactus: Exactus;
-	ERmsg, Port: import exactus;
+	ERmsg, Port, Trecord: import exactus;
 
 TestExactus: module {
 	init: fn(ctxt: ref Draw->Context, argv: list of string);
@@ -120,6 +120,12 @@ testdata()
 	b = array[4] of { * => byte 0 };
 	math->export_real32(b, x);
 	sys->fprint(stdout, "real cmp: %g =? %g\n", r, x[0]);
+	
+	sys->fprint(stdout, "Test Trecord:\n");
+	t := ref Exactus->Trecord(big 0, 651.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+	sys->fprint(stdout, "%s\n", hexdump(t.pack()));
+	t = ref Exactus->Trecord(big 200, 651.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+	sys->fprint(stdout, "%s\n", hexdump(t.pack()));
 }
 
 testnetwork(p: ref Exactus->Port)
@@ -165,7 +171,9 @@ testnetwork(p: ref Exactus->Port)
 		(r, bytes, err) = port.readreply(125);
 		ms := sys->millisec();
 		(e, mt) = r.dtype();
-		sys->fprint(stdout, "%04d: %0.2f°C\t%g Amps\n", ms-start, mdata(mt, 4), mdata(mt, 0));
+		if(mt != nil)
+			sys->fprint(stdout, "%04d: %0.2f°C\t%5g Amps\n", ms-start,
+						mdata(mt, 4), mdata(mt, 0));
 	}
 }
 

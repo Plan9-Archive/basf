@@ -27,10 +27,8 @@ Exactus : module
 	ERcurrent,
 	ERdual,
 	ERdevice,
-	ERstx,
-	ERack,
-	ERnak,
-	Emax:	con 100+iota;
+	ERreserved,
+	Emax:	con 16r81+iota;
 	
 	# Exactus host to Pyrometer commands
 	ECmodbus,
@@ -61,13 +59,31 @@ Exactus : module
 		readreply:	fn(p: self ref Port, ms: int): (ref ERmsg, array of byte, string);
 	};
 	
+	Emsg: adt {
+		pick {
+		Temerature =>
+			degrees:	real;
+		Current =>
+			amps:	real;
+		Dual =>
+			degrees:	real;
+			amps:	real;
+		Device =>
+			deve:	real;
+			devc:	real;
+		Acknowledge =>
+			c:	byte;
+		}
+		
+		unpack: fn(b: array of byte): (int, ref Emsg);
+	};
+	
 	ETmsg: adt {
 		pick {
 		Readerror =>
 			error:	string;
 		ExactusMsg =>
-			rtype:	int;
-			data:	array of byte;
+			msg:	ref Emsg;
 		ModbusMsg =>
 			addr:	byte;
 			msg:	ref Modbus->TMmsg;
@@ -77,7 +93,7 @@ Exactus : module
 		packedsize:	fn(nil: self ref ETmsg): int;
 		pack:	fn(nil: self ref ETmsg): array of byte;
 		
-		dtype:	fn(nil: self ref ETmsg): (array of byte, ref Modbus->TMmsg);
+		dtype:	fn(nil: self ref ETmsg): (ref Emsg, ref Modbus->TMmsg);
 	};
 	
 	ERmsg: adt {
@@ -85,8 +101,7 @@ Exactus : module
 		Readerror =>
 			error:	string;
 		ExactusMsg =>
-			rtype:	int;
-			data: array of byte;
+			msg:	ref Emsg;
 		ModbusMsg =>
 			msg:	ref Modbus->RMmsg;
 		}
@@ -94,13 +109,33 @@ Exactus : module
 		packedsize:	fn(nil: self ref ERmsg): int;
 		pack:	fn(nil: self ref ERmsg): array of byte;
 		
-		dtype:	fn(nil: self ref ERmsg): (array of byte, ref Modbus->RMmsg);
+		dtype:	fn(nil: self ref ERmsg): (ref Emsg, ref Modbus->RMmsg);
+	};
+	
+	# TemperaSure binary data record
+	Trecord: adt {
+		time: big;			# saved as 32-bit unsigned int
+		temp0:	real;
+		temp1:	real;
+		temp2:	real;
+		current1:	real;
+		current2:	real;
+		etemp1:	real;
+		etemp2:	real;
+		emissivity:	real;
+		
+		pack:	fn(nil: self ref Trecord): array of byte;
 	};
 	
 	init:	fn();
 	
 	open:	fn(path: string): ref Exactus->Port;
 	close:		fn(p: ref Port): ref Sys->Connection;
+	readreply:	fn(p: ref Port, ms: int): (ref ERmsg, array of byte, string);
+	write: fn(p: ref Port, b: array of byte): int;
+		
+	switchexactus:	fn(p: ref Port, addr: int);
+	switchmodbus:	fn(p: ref Port);
 	
 	swapendian:	fn(b: array of byte): array of byte;
 
