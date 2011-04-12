@@ -121,11 +121,18 @@ testdata()
 	math->export_real32(b, x);
 	sys->fprint(stdout, "real cmp: %g =? %g\n", r, x[0]);
 	
-	sys->fprint(stdout, "Test Trecord:\n");
+	sys->fprint(stdout, "Test Trecord: 0, 651.5\n");
 	t := ref Exactus->Trecord(0, 651.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 	sys->fprint(stdout, "%s\n", hexdump(t.pack()));
+	sys->fprint(stdout, "Test Trecord: 200, 651.25\n");
 	t = ref Exactus->Trecord(200, 651.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 	sys->fprint(stdout, "%s\n", hexdump(t.pack()));
+	
+	sys->fprint(stdout, "Test Exactus temperature: 674.05 C\n");
+	b = array[] of {byte 16r81, byte 16r44, byte 16r28, byte 16r80, byte 16r83, byte 0};
+	sys->fprint(stderr, "%s\n", hexdump(b));
+	sys->fprint(stderr, "%s\n", hexdump(exactus->deescape(b)));
+	sys->fprint(stderr, "%s\n", hexdump(exactus->escape(exactus->deescape(b))));
 }
 
 testnetwork(p: ref Exactus->Port)

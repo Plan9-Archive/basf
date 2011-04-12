@@ -23,12 +23,12 @@ Exactus : module
 	Tmax:	con 100+iota;
 	
 	# Exactus Data Messages
+	ERescape,
 	ERtemperature,
 	ERcurrent,
 	ERdual,
 	ERdevice,
-	ERreserved,
-	Emax:	con 16r81+iota;
+	ERreserved:	con byte (16r80+iota);
 	
 	# Exactus host to Pyrometer commands
 	ECmodbus,
@@ -160,6 +160,9 @@ Exactus : module
 	
 	swapendian:	fn(b: array of byte): array of byte;
 
+	escape,
+	deescape:	fn(buf: array of byte): array of byte;
+	
 	lrc:	fn(buf: array of byte): byte;
 	ieee754:	fn(b: array of byte): real;
 };

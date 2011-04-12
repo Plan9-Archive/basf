@@ -123,8 +123,11 @@ Emsg.unpack(b: array of byte): (int, ref Emsg)
 	m : ref Emsg;
 	if(b != nil && len b > 0) {
 		case int b[0] {
-		# Temperature =>
-			
+		# ERtemperature =>
+		# ERcurrent =>
+		# ERdual =>
+		# ERdevice =>
+		# ERreserved =>
 		int ACK or int NAK =>
 			m = ref Emsg.Acknowledge(b[0]);
 			i++;
@@ -133,9 +136,49 @@ Emsg.unpack(b: array of byte): (int, ref Emsg)
 	return (i, m);
 }
 
-descape(b: array of byte): array of byte
+escape(buf: array of byte): array of byte
 {
 	nb : array of byte;
+	if(buf != nil) {
+		nb = array[len buf] of byte;
+		j := 0;
+		for(i:=0; i<len buf; i++) {
+			b := buf[i];
+			if(ERescape <= b && b <= ERreserved) {
+				tmp := array[len nb +1] of byte;
+				tmp[0:] = nb[0:len nb];
+				nb = tmp;
+				nb[j++] = ERescape;
+			}
+			nb[j++] = b;
+		}
+	}
+	return nb;
+}
+
+deescape(buf: array of byte): array of byte
+{
+	nb : array of byte;
+	if(buf != nil && len buf > 0) {
+		valid := 1;
+		n := len buf;
+		tmp := array[n] of { * => byte 0 };
+		j := 0;
+		for(i:=0; i<n; i++) {
+			b := buf[i];
+			if(b == ERescape) {
+				i++;
+				if(i>=n) {
+					valid = 0;
+					break;
+				}
+				b = buf[i];
+			}
+			tmp[j++] = b;
+		}
+		if(valid)
+			nb = tmp[0:j];
+	}
 	return nb;
 }
 
