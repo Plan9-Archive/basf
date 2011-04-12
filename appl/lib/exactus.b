@@ -117,17 +117,94 @@ Port.readreply(p: self ref Port, ms: int): (ref ERmsg, array of byte, string)
 	return (r, b, err);
 }
 
+Emsg.temperature(m: self ref Emsg): real
+{
+	if(m != nil) {
+		pick p := m {
+		Temperature =>
+			return p.degrees;
+		}
+	}
+	return Math->NaN;
+}
+
+Emsg.current(m: self ref Emsg): real
+{
+	if(m != nil) {
+		pick p := m {
+		Current =>
+			return p.amps;
+		}
+	}
+	return Math->NaN;
+}
+
+Emsg.dual(m: self ref Emsg): (real, real)
+{
+	d, a : real;
+	d = a = Math->NaN;
+	if(m != nil) {
+		pick p := m {
+		Dual =>
+			d = p.degrees;
+			a = p.amps;
+		}
+	}
+	return (d, a);
+}
+
+Emsg.device(m: self ref Emsg): (real, real)
+{
+	e, c : real;
+	e = c = Math->NaN;
+	if(m != nil) {
+		pick p := m {
+		Device =>
+			e = p.edegrees;
+			c = p.cdegrees;
+		}
+	}
+	return (e, c);
+}
+
+Emsg.acknowledge(m: self ref Emsg): byte
+{
+	b : byte;
+	if(m != nil) {
+		pick p := m {
+		Acknowledge =>
+			b = p.c;
+		}
+	}
+	return b;
+}
+
 Emsg.unpack(b: array of byte): (int, ref Emsg)
 {
 	i := 0;
 	m : ref Emsg;
 	if(b != nil && len b > 0) {
+		nb : array of byte;
 		case int b[0] {
-		# ERtemperature =>
-		# ERcurrent =>
-		# ERdual =>
-		# ERdevice =>
-		# ERreserved =>
+		int ERtemperature =>
+			(i, nb) = deescape(b[1:], 4);
+			if(nb != nil)
+				m = ref Emsg.Temperature(ieee754(nb));
+		int ERcurrent =>
+			(i, nb) = deescape(b[1:], 4);
+			if(nb != nil)
+				m = ref Emsg.Current(ieee754(nb));
+		int ERdual =>
+			(i, nb) = deescape(b[1:], 8);
+			if(nb != nil)
+				m = ref Emsg.Dual(ieee754(nb[0:4]), ieee754(nb[4:8]));
+		int ERdevice =>
+			(i, nb) = deescape(b[1:], 8);
+			if(nb != nil)
+				m = ref Emsg.Device(ieee754(nb[0:4]), ieee754(nb[4:8]));
+		int ERreserved =>
+			sys->fprint(stderr, "Reserved message attempt: %s\n", hexdump(b));
+			i = len b;
 		int ACK or int NAK =>
 			m = ref Emsg.Acknowledge(b[0]);
 			i++;
@@ -156,19 +233,20 @@ escape(buf: array of byte): array of byte
 	return nb;
 }
 
-deescape(buf: array of byte): array of byte
+deescape(buf: array of byte, n: int): (int, array of byte)
 {
 	nb : array of byte;
-	if(buf != nil && len buf > 0) {
+	i := 0;
+	m := len buf;
+	if(buf != nil && m >= n) {
 		valid := 1;
-		n := len buf;
 		tmp := array[n] of { * => byte 0 };
 		j := 0;
-		for(i:=0; i<n; i++) {
+		for(i=0; i<m; i++) {
 			b := buf[i];
 			if(b == ERescape) {
 				i++;
-				if(i>=n) {
+				if(i>=m) {
 					valid = 0;
 					break;
 				}
@@ -179,7 +257,7 @@ deescape(buf: array of byte): array of byte
 		if(valid)
 			nb = tmp[0:j];
 	}
-	return nb;
+	return (i, nb);
 }
 
 ttag2type := array[] of {

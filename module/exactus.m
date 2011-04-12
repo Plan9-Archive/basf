@@ -82,7 +82,7 @@ Exactus : module
 	
 	Emsg: adt {
 		pick {
-		Temerature =>
+		Temperature =>
 			degrees:	real;
 		Current =>
 			amps:	real;
@@ -90,11 +90,17 @@ Exactus : module
 			degrees:	real;
 			amps:	real;
 		Device =>
-			deve:	real;
-			devc:	real;
+			edegrees:	real;
+			cdegrees:	real;
 		Acknowledge =>
 			c:	byte;
 		}
+		
+		temperature:	fn(m: self ref Emsg): real;
+		current:		fn(m: self ref Emsg): real;
+		dual:			fn(m: self ref Emsg): (real, real);
+		device:			fn(m: self ref Emsg): (real, real);
+		acknowledge:	fn(m: self ref Emsg): byte;
 		
 		unpack: fn(b: array of byte): (int, ref Emsg);
 	};
@@ -160,8 +166,8 @@ Exactus : module
 	
 	swapendian:	fn(b: array of byte): array of byte;
 
-	escape,
-	deescape:	fn(buf: array of byte): array of byte;
+	escape:		fn(buf: array of byte): array of byte;
+	deescape:	fn(buf: array of byte, n: int): (int, array of byte);
 	
 	lrc:	fn(buf: array of byte): byte;
 	ieee754:	fn(b: array of byte): real;

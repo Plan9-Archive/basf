@@ -20,7 +20,7 @@ modbus: Modbus;
 	TMmsg, RMmsg: import modbus;
 
 exactus: Exactus;
-	ERmsg, Port, Trecord: import exactus;
+	Port, Emsg, ERmsg, Trecord: import exactus;
 
 TestExactus: module {
 	init: fn(ctxt: ref Draw->Context, argv: list of string);
@@ -131,8 +131,35 @@ testdata()
 	sys->fprint(stdout, "Test Exactus temperature: 674.05 C\n");
 	b = array[] of {byte 16r81, byte 16r44, byte 16r28, byte 16r80, byte 16r83, byte 0};
 	sys->fprint(stderr, "%s\n", hexdump(b));
-	sys->fprint(stderr, "%s\n", hexdump(exactus->deescape(b)));
-	sys->fprint(stderr, "%s\n", hexdump(exactus->escape(exactus->deescape(b))));
+	(nil, tb) := exactus->deescape(b[1:], 4);
+	sys->fprint(stderr, "%s\n", hexdump(tb));
+	sys->fprint(stderr, "%s\n", hexdump(exactus->escape(tb)));
+	sys->fprint(stdout, "\t%g\n", exactus->ieee754(tb));
+	
+	(n, m) := Emsg.unpack(b);
+	sys->fprint(stdout, "Temperature Emsg.unpack(): %s\n", hexdump(b));
+	sys->fprint(stderr, "\tdegrees: %g\n", m.temperature());
+
+	b = array[] of {byte 16r82, byte 16r2C, byte 16r5A, byte 16r4E, byte 16r12};
+	(n, m) = Emsg.unpack(b);
+	sys->fprint(stdout, "Current Emsg.unpack(): %s\n", hexdump(b));
+	sys->fprint(stderr, "\tamps: %g\n", m.current());
+	
+	b = array[] of {byte 16r83, byte 16r44, byte 16r28, byte 16r4D, byte 16r71,
+					byte 16r35, byte 16r75, byte 16rF9, byte 16r08};
+	(n, m) = Emsg.unpack(b);
+	sys->fprint(stdout, "Dual Emsg.unpack(): %s\n", hexdump(b));
+	(d, a) := m.dual();
+	sys->fprint(stderr, "\tdegrees: %g\n", d);
+	sys->fprint(stderr, "\tamps: %g\n", a);
+
+	b = array[] of {byte 16r84, byte 16r41, byte 16rE3, byte 16r33, byte 16r33,
+					byte 16r41, byte 16rFC, byte 16r00, byte 16r00};
+	(n, m) = Emsg.unpack(b);
+	sys->fprint(stdout, "Device Emsg.unpack(): %s\n", hexdump(b));
+	(d, a) = m.device();
+	sys->fprint(stderr, "\telectronics: %g\n", d);
+	sys->fprint(stderr, "\tchassis: %g\n", a);
 }
 
 testnetwork(p: ref Exactus->Port)
