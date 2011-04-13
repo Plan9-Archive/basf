@@ -160,6 +160,19 @@ testdata()
 	(d, a) = m.device();
 	sys->fprint(stderr, "\telectronics: %g\n", d);
 	sys->fprint(stderr, "\tchassis: %g\n", a);
+	
+	b = array[] of {Exactus->ACK, byte 16r83, byte 16r44, byte 16r28, byte 16r4D,
+					byte 16r71, byte 16r35, byte 16r75, byte 16rF9, byte 16r08};
+	(n, m) = Emsg.unpack(b);
+	sys->fprint(stdout, "Acknowledge Emsg.unpack(): %s\n", hexdump(b));
+	sys->fprint(stdout, "\tn: %d %d\n", n, len b);
+	if(n) {
+		b = b[n:];
+	}
+	(n, m) = Emsg.unpack(b);
+	sys->fprint(stdout, " remaining: %s\n", hexdump(b));
+	(d, a) = m.dual();
+	sys->fprint(stdout, "\tn: %.3f %.5e\n", d, a);
 }
 
 testnetwork(p: ref Exactus->Port)

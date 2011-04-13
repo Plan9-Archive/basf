@@ -22,6 +22,9 @@ modbus: Modbus;
 stderr: ref Sys->FD;
 debug := 0;
 
+# buffered reading channel
+BUFSZ: con 2048;
+
 init()
 {
 	sys = load Sys Sys->PATH;
@@ -66,9 +69,10 @@ Port.getreply(p: self ref Port): (ref ERmsg, array of byte, string)
 	if(n > 0) {
 		if(p.mode == Exactus->ModeExactus) {
 			(o, m) := Emsg.unpack(p.avail);
-			if(m != nil)
+			if(m != nil) {
 				r = ref ERmsg.ExactusMsg(m);
-			p.avail = p.avail[o:];
+				p.avail = p.avail[o:];
+			}
 		}
 		if(p.mode == Exactus->ModeModbus) {
 			if(n >= 4) {
@@ -398,6 +402,16 @@ Trecord.pack(t: self ref Trecord): array of byte
 	return b;
 }
 
+Trecord.unpack(b: array of byte): (int, ref Trecord)
+{
+	if(len b < 36)
+		return (0, nil);
+	
+	t : ref Trecord;
+	n := 0;
+	return (n, t);
+}
+
 lpackr(r: real): array of byte
 {
 	b := array[4] of byte;
@@ -413,14 +427,7 @@ open(path: string): ref Exactus->Port
 {
 	if(sys == nil) init();
 	
-	np := ref Port;
-	np.mode = ModeModbus;
-	np.path = path;
-	np.rdlock = Semaphore.new();
-	np.wrlock = Semaphore.new();
-	np.avail = nil;
-	np.pid = 0;
-	
+	np := ref Port(ModeModbus, path, nil, nil, Semaphore.new(), Semaphore.new(), nil, nil);	
 	openport(np);
 	if(np.data != nil);
 		reading(np);
@@ -443,7 +450,7 @@ openport(p: ref Port)
 		if(str->in('!', p.path)) {
 			(ok, net) := sys->dial(p.path, nil);
 			if(ok == -1) {
-				raise "can't open "+p.path;
+				sys->fprint(stderr, "can't open %s\n", p.path);
 				return;
 			}
 			
@@ -468,19 +475,18 @@ close(p: ref Port): ref Sys->Connection
 {
 	if(p == nil)
 		return nil;
-	
-	if(p.pid != 0){
-		kill(p.pid);
-		p.pid = 0;
-	}
+
 	if(p.data == nil)
 		return nil;
+		
+	hangup := array[] of {byte "hangup"};
+	sys->write(p.ctl, hangup, len hangup);
 	c := ref sys->Connection(p.data, p.ctl, nil);
 	p.ctl = nil;
 	p.data = nil;
 	
-	hangup := array[] of {byte "hangup"};
-	sys->write(p.ctl, hangup, len hangup);
+	for(; p.pids != nil; p.pids = tl p.pids)
+		kill(hd p.pids);
 	
 	return c;
 }
@@ -514,35 +520,46 @@ switchmodbus(p: ref Port)
 
 reading(p: ref Port)
 {
-	if(p.pid == 0) {
-		pidc := chan of int;
-		spawn reader(p, pidc);
-		p.pid = <-pidc;
-	}
+	if(p.pids == nil)
+		spawn reader(p);
 }
 
-reader(p: ref Port, pidc: chan of int)
+reader(p: ref Port)
 {
-	pidc <-= sys->pctl(0, nil);
+	p.pids = sys->pctl(0, nil) :: p.pids;
 	
-	buf := array[1] of byte;
-	for(;;) {
-		while((n := sys->read(p.data, buf, len buf)) > 0) {
-			p.rdlock.obtain();
-			if(len p.avail < Sys->ATOMICIO) {
-				na := array[len p.avail + n] of byte;
-				if(len p.avail)
-					na[0:] = p.avail[0:];
-				na[len p.avail:] = buf[0:n];
-				p.avail = na;
-			}
-			p.rdlock.release();
+	c := chan[BUFSZ] of byte;
+	e := chan of int;
+	spawn bytereader(p, c, e);
+	
+	for(;;) alt {
+	b := <- c =>
+		p.rdlock.obtain();
+		if(len p.avail < Sys->ATOMICIO) {
+			n := len p.avail;
+			na := array[n + 1] of byte;
+			if(n)
+				na[0:] = p.avail[0:n];
+			na[n] = b;
+			p.avail = na;
 		}
+		p.rdlock.release();
+	<-e =>
 		sys->fprint(stderr, "Exactus reader closed, trying again.\n");
 		p.data = nil;
 		p.ctl = nil;
 		openport(p);
+		spawn bytereader(p, c, e);
 	}
+}
+
+bytereader(p: ref Port, c: chan of byte, e: chan of int)
+{
+	p.pids = sys->pctl(0, nil) :: p.pids;
+	buf := array[1] of byte;
+	while(sys->read(p.data, buf, len buf) > 0)
+		c <-= buf[0];
+	e <-= 0;
 }
 
 # Exactus mode LRC Calculation
@@ -623,5 +640,19 @@ kill(pid: int)
 {
 	fd := sys->open("#p/"+string pid+"/ctl", Sys->OWRITE);
 	if(fd == nil || sys->fprint(fd, "kill") < 0)
-		sys->print("zaber: can't kill %d: %r\n", pid);
+		sys->fprint(stderr, "exactus: can't kill %d: %r\n", pid);
+}
+
+g32(f: array of byte, i: int): int
+{
+	return (((((int f[i+3] << 8) | int f[i+2]) << 8) | int f[i+1]) << 8) | int f[i];
+}
+
+p32(a: array of byte, o: int, v: int): int
+{
+	a[o] = byte v;
+	a[o+1] = byte (v>>8);
+	a[o+2] = byte (v>>16);
+	a[o+3] = byte (v>>24);
+	return o+BIT32SZ;
 }

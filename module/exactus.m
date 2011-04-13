@@ -6,6 +6,11 @@ Exactus : module
 {
 	PATH:		con "/dis/lib/exactus.dis";
 
+	BIT8SZ:	con 1;
+	BIT16SZ:	con 2;
+	BIT32SZ:	con 4;
+	BIT64SZ:	con 8;
+
 	STX:	con byte 16r02;
 	ETX:	con byte 16r03;
 	ACK:	con byte 16r06;
@@ -70,9 +75,9 @@ Exactus : module
 		rdlock: ref Lock->Semaphore;
 		wrlock: ref Lock->Semaphore;		
 		
-		# input reader
+		# bytes from reader
 		avail:	array of byte;
-		pid:	int;
+		pids:	list of int;
 		
 		write: fn(p: self ref Port, b: array of byte): int;
 		
@@ -152,6 +157,7 @@ Exactus : module
 		emissivity:	real;
 		
 		pack:	fn(nil: self ref Trecord): array of byte;
+		unpack: fn(b: array of byte): (int, ref Trecord);
 	};
 	
 	init:	fn();
