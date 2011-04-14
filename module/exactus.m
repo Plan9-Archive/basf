@@ -168,8 +168,8 @@ Exactus : module
 	readreply:	fn(p: ref Port, ms: int): (ref ERmsg, array of byte, string);
 	write: fn(p: ref Port, b: array of byte): int;
 	
-	switchexactus:	fn(p: ref Port, addr: int);
-	switchmodbus:	fn(p: ref Port);
+	exactusmode:	fn(p: ref Port, addr: int);
+	modbusmode: 	fn(p: ref Port);
 	
 	swapendian:	fn(b: array of byte): array of byte;
 

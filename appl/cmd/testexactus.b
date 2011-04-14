@@ -74,7 +74,7 @@ init(nil: ref Draw->Context, argv: list of string)
 		}
 	}
 	
-	testdata();
+	# testdata();
 
 	if(port != nil && skip == 0)
 		testnetwork(port);
@@ -177,12 +177,14 @@ testdata()
 
 testnetwork(p: ref Exactus->Port)
 {
-	exactus->switchmodbus(port);
+	exactus->modbusmode(port);
+	port.readreply(500);
+	purge(p);
 
 	m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1305, 16r0009);
 	r := test(p, m.pack(), "read (0x1305) Serial number (9 ASCII bytes)");
 	purge(p);
-	(e, mt) := r.dtype();
+	(nil, mt) := r.dtype();
 	if(mt != nil) {
 		sys->fprint(stdout, "Text: %s\n", mt.text());
 		pick x := mt {
@@ -205,7 +207,7 @@ testnetwork(p: ref Exactus->Port)
 	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r0000, 16r0002);
 	r = test(port, m.pack(), "read (0x0000) channel 1 temperature");
 	purge(port);
-	(e, mt) = r.dtype();
+	(nil, mt) = r.dtype();
 	if(mt != nil) {
 		sys->fprint(stdout, "Text: %s\n", mt.text());
 		sys->fprint(stdout, "\t%g\n", mdata(mt, 0));
@@ -221,7 +223,7 @@ testnetwork(p: ref Exactus->Port)
 		port.write(m.pack());
 		(r, bytes, err) = port.readreply(125);
 		ms := sys->millisec();
-		(e, mt) = r.dtype();
+		(nil, mt) = r.dtype();
 		if(mt != nil)
 			sys->fprint(stdout, "%04d: %0.2f°C\t%5g Amps\n", ms-start,
 						mdata(mt, 4), mdata(mt, 0));
@@ -232,11 +234,14 @@ testnetwork(p: ref Exactus->Port)
 	
 	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1011, 16r0001);
 	r = test(port, m.pack(), "read (0x1011) sample rate");
-	
+}
+
+testexactus()
+{
 	sys->fprint(stdout, "\nTesting Exactus Mode:\n");
-	exactus->switchexactus(port, 1);
-	(r, bytes, err) = port.readreply(125);
-	(e, nil) = r.dtype();
+	exactus->exactusmode(port, 1);
+	(r, bytes, err) := port.readreply(125);
+	(e, nil) := r.dtype();
 	if(e != nil)
 		sys->fprint(stderr, "Switched to Exactus Mode: %s\n", e.text());
 
@@ -248,8 +253,8 @@ testnetwork(p: ref Exactus->Port)
 	if(e != nil)
 		sys->fprint(stderr, "Start conversions: %s\n", e.text());
 
-	start = sys->millisec();
-	for(i = 0; i < 100; i++) {
+	start := sys->millisec();
+	for(i := 0; i < 100; i++) {
 		(r, bytes, err) = port.readreply(125);
 		if(r != nil || bytes != nil || err != nil) {
 			sys->fprint(stderr, "%3d: ", i);
@@ -258,25 +263,25 @@ testnetwork(p: ref Exactus->Port)
 			if(err != nil)
 				sys->fprint(stderr, "\t%s", err);
 			if(r != nil)
-				(e, mt) = r.dtype();
+				(e, nil) = r.dtype();
 				if(e != nil)
 					sys->fprint(stderr, "\t%g°C", e.temperature());
 			sys->fprint(stderr, "\n");
 		}
 	}
-	end = sys->millisec();
+	end := sys->millisec();
 	sys->fprint(stderr, "%d exactus reads in %dms (%g ms/r)\n", 100, end - start,
 				real(end-start)/real 100);
 
 	# stopconversion
-	b = array[] of {Exactus->STX, byte 16r30, byte 16r30, Exactus->ETX};
-	port.write(b);
-	(r, bytes, err) = port.readreply(125);
-	(e, nil) = r.dtype();
-	if(e != nil)
-		sys->fprint(stderr, "Stop conversions: %s\n", e.text());
+#	b = array[] of {Exactus->STX, byte 16r30, byte 16r30, Exactus->ETX};
+#	port.write(b);
+#	(r, bytes, err) = port.readreply(125);
+#	(e, nil) = r.dtype();
+#	if(e != nil)
+#		sys->fprint(stderr, "Stop conversions: %s\n", e.text());
 
-	exactus->switchmodbus(port);
+	exactus->modbusmode(port);
 }
 
 mdata(m: ref Modbus->RMmsg, n: int): real

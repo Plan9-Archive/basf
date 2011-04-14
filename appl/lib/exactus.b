@@ -68,15 +68,15 @@ Port.getreply(p: self ref Port): (ref ERmsg, array of byte, string)
 	n := len p.avail;
 	if(n > 0) {
 		# sys->fprint(stderr, "getreply: %s\n", hexdump(p.avail));
-		if(p.mode == ModeExactus) {
+		case p.mode {
+		ModeExactus =>
 			(o, m) := Emsg.unpack(p.avail);
 			if(m != nil) {
 				r = ref ERmsg.ExactusMsg(m);
 				b = p.avail[0:o];
 				p.avail = p.avail[o:];
 			}
-		}
-		if(p.mode == ModeModbus) {
+		ModeModbus =>
 			if(n >= 4) {
 				(o, m) := RMmsg.unpack(p.avail, Modbus->FrameRTU);
 				if(m != nil) {
@@ -497,7 +497,7 @@ openport(p: ref Port)
 		raise "fail: file does not exist";
 		return;
 	}
-	switchmodbus(p);
+	modbusmode(p);
 }
 
 # shut down reader (if any)
@@ -532,7 +532,7 @@ write(p: ref Port, b: array of byte): int
 }
 
 
-switchexactus(p: ref Port, addr: int)
+exactusmode(p: ref Port, addr: int)
 {
 	if(p != nil) {
 		p.rdlock.obtain();
@@ -544,14 +544,13 @@ switchexactus(p: ref Port, addr: int)
 	}
 }
 
-switchmodbus(p: ref Port)
+modbusmode(p: ref Port)
 {
 	if(p != nil) {
-		b := array[] of {
-			byte 16r02, byte 16r4d, byte 16r4d, byte 16r03,
-		};
-		p.rdlock.obtain();
+		b := array[] of {STX, byte 16r4d, byte 16r4d, ETX};
 		p.write(b);
+		sys->sleep(125);
+		p.rdlock.obtain();
 		p.mode = ModeModbus;
 		p.avail = nil;
 		p.rdlock.release();
@@ -562,6 +561,29 @@ reading(p: ref Port)
 {
 	if(p.pids == nil)
 		spawn reader(p);
+}
+
+oldreader(p: ref Port)
+{
+	p.pids = sys->pctl(0, nil) :: p.pids;
+	
+	buf := array[1] of byte;
+	for(;;) {
+		while((n := sys->read(p.data, buf, len buf)) > 0) {
+			p.rdlock.obtain();
+			if(len p.avail < Sys->ATOMICIO) {
+				na := array[len p.avail + n] of byte;
+				if(len p.avail)
+					na[0:] = p.avail[0:];
+				na[len p.avail:] = buf[0:n];
+				p.avail = na;
+			}
+			p.rdlock.release();
+		}
+		sys->fprint(stderr, "Exactus reader closed, trying again.\n");
+		p.data = nil;
+		p.ctl = nil;
+	}
 }
 
 reader(p: ref Port)

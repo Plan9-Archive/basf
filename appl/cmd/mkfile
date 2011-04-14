@@ -3,7 +3,10 @@
 DIRS=\
 
 TARG=\
+
+TESTTARG=\
 	testexactus.dis\
+
 
 SYSMODULES=\
 	arg.m\
@@ -13,3 +16,5 @@ SYSMODULES=\
 DISBIN=$ROOT/dis/basf
 
 <$ROOT/mkfiles/mkdis
+
+all:V:	$TARG $TESTTARG
