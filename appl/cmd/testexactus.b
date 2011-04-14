@@ -86,7 +86,7 @@ init(nil: ref Draw->Context, argv: list of string)
 purge(p: ref Port)
 {
 	p.rdlock.obtain();
-	p.avail = array[0] of byte;
+	p.avail = nil;
 	p.rdlock.release();
 }
 
@@ -177,6 +177,8 @@ testdata()
 
 testnetwork(p: ref Exactus->Port)
 {
+	exactus->switchmodbus(port);
+
 	m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1305, 16r0009);
 	r := test(p, m.pack(), "read (0x1305) Serial number (9 ASCII bytes)");
 	purge(p);
@@ -209,10 +211,12 @@ testnetwork(p: ref Exactus->Port)
 		sys->fprint(stdout, "\t%g\n", mdata(mt, 0));
 	}
 
+	sys->fprint(stdout, "\nTesting Modbus Mode:\n");
 	bytes : array of byte;
 	err : string;
+	C := 20;
 	start := sys->millisec();
-	for(i := 0; i < 100; i++) {
+	for(i := 0; i < C; i++) {
 		m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r0004, 16r0004);
 		port.write(m.pack());
 		(r, bytes, err) = port.readreply(125);
@@ -222,6 +226,57 @@ testnetwork(p: ref Exactus->Port)
 			sys->fprint(stdout, "%04d: %0.2f°C\t%5g Amps\n", ms-start,
 						mdata(mt, 4), mdata(mt, 0));
 	}
+	end := sys->millisec();
+	sys->fprint(stderr, "%d modbus reads in %dms (%g ms/r)\n", C, end - start,
+				real(end-start)/real C);
+	
+	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1011, 16r0001);
+	r = test(port, m.pack(), "read (0x1011) sample rate");
+	
+	sys->fprint(stdout, "\nTesting Exactus Mode:\n");
+	exactus->switchexactus(port, 1);
+	(r, bytes, err) = port.readreply(125);
+	(e, nil) = r.dtype();
+	if(e != nil)
+		sys->fprint(stderr, "Switched to Exactus Mode: %s\n", e.text());
+
+	# startconversions
+	b := array[] of {Exactus->STX, byte 16r31, byte 16r31, Exactus->ETX};
+	port.write(b);
+	(r, bytes, err) = port.readreply(125);
+	(e, nil) = r.dtype();
+	if(e != nil)
+		sys->fprint(stderr, "Start conversions: %s\n", e.text());
+
+	start = sys->millisec();
+	for(i = 0; i < 100; i++) {
+		(r, bytes, err) = port.readreply(125);
+		if(r != nil || bytes != nil || err != nil) {
+			sys->fprint(stderr, "%3d: ", i);
+			if(bytes != nil)
+				sys->fprint(stderr, "\t%s", hexdump(bytes));			
+			if(err != nil)
+				sys->fprint(stderr, "\t%s", err);
+			if(r != nil)
+				(e, mt) = r.dtype();
+				if(e != nil)
+					sys->fprint(stderr, "\t%g°C", e.temperature());
+			sys->fprint(stderr, "\n");
+		}
+	}
+	end = sys->millisec();
+	sys->fprint(stderr, "%d exactus reads in %dms (%g ms/r)\n", 100, end - start,
+				real(end-start)/real 100);
+
+	# stopconversion
+	b = array[] of {Exactus->STX, byte 16r30, byte 16r30, Exactus->ETX};
+	port.write(b);
+	(r, bytes, err) = port.readreply(125);
+	(e, nil) = r.dtype();
+	if(e != nil)
+		sys->fprint(stderr, "Stop conversions: %s\n", e.text());
+
+	exactus->switchmodbus(port);
 }
 
 mdata(m: ref Modbus->RMmsg, n: int): real
@@ -249,9 +304,7 @@ test(p: ref Port, b: array of byte, s: string): ref ERmsg
 		sys->fprint(stderr, "TX -> %s\t(%d, %d)\n", hexdump(b), n, stop-start);
 
 		(r, bytes, err) = p.readreply(500);
-		p.rdlock.obtain();
 		sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
-		p.rdlock.release();
 		if(r != nil) {
 			buf := r.pack();
 			sys->fprint(stderr, "reply: %s\n", hexdump(buf));

@@ -108,6 +108,7 @@ Exactus : module
 		acknowledge:	fn(m: self ref Emsg): byte;
 		
 		unpack: fn(b: array of byte): (int, ref Emsg);
+		text:	fn(m: self ref Emsg): string;
 	};
 	
 	ETmsg: adt {
@@ -166,7 +167,7 @@ Exactus : module
 	close:		fn(p: ref Port): ref Sys->Connection;
 	readreply:	fn(p: ref Port, ms: int): (ref ERmsg, array of byte, string);
 	write: fn(p: ref Port, b: array of byte): int;
-		
+	
 	switchexactus:	fn(p: ref Port, addr: int);
 	switchmodbus:	fn(p: ref Port);
 	

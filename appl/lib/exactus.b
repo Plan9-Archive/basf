@@ -67,14 +67,16 @@ Port.getreply(p: self ref Port): (ref ERmsg, array of byte, string)
 	p.rdlock.obtain();
 	n := len p.avail;
 	if(n > 0) {
-		if(p.mode == Exactus->ModeExactus) {
+		# sys->fprint(stderr, "getreply: %s\n", hexdump(p.avail));
+		if(p.mode == ModeExactus) {
 			(o, m) := Emsg.unpack(p.avail);
 			if(m != nil) {
 				r = ref ERmsg.ExactusMsg(m);
+				b = p.avail[0:o];
 				p.avail = p.avail[o:];
 			}
 		}
-		if(p.mode == Exactus->ModeModbus) {
+		if(p.mode == ModeModbus) {
 			if(n >= 4) {
 				(o, m) := RMmsg.unpack(p.avail, Modbus->FrameRTU);
 				if(m != nil) {
@@ -183,6 +185,30 @@ Emsg.acknowledge(m: self ref Emsg): byte
 	return b;
 }
 
+Emsg.text(m: self ref Emsg): string
+{
+	s := "";
+	if(m != nil)
+		pick x := m {
+		Temperature =>
+			s = sys->sprint("%.3f°C", x.degrees);
+		Current =>
+			s = sys->sprint("%4e Amps", x.amps);
+		Dual =>
+			s = sys->sprint("%.3f°C %4e Amps", x.degrees, x.amps);
+		Device =>
+			s = sys->sprint("electronics=%g chassis=%g", x.edegrees, x.cdegrees);
+		Acknowledge =>
+			if(x.c == ACK)
+				s += "ACK";
+			else if(x.c == NAK)
+				s += "NAK";
+			else s+= "(invalid)";
+		}
+		
+	return s;
+}
+
 Emsg.unpack(b: array of byte): (int, ref Emsg)
 {
 	i := 0;
@@ -211,8 +237,10 @@ Emsg.unpack(b: array of byte): (int, ref Emsg)
 			i = len b;
 		int ACK or int NAK =>
 			m = ref Emsg.Acknowledge(b[0]);
-			i++;
+		* =>
+			i--;
 		}
+		i++;
 	}
 	return (i, m);
 }
@@ -257,6 +285,8 @@ deescape(buf: array of byte, n: int): (int, array of byte)
 				b = buf[i];
 			}
 			tmp[j++] = b;
+			if(j == n)
+				break;
 		}
 		if(valid)
 			nb = tmp[0:j];
@@ -504,8 +534,14 @@ write(p: ref Port, b: array of byte): int
 
 switchexactus(p: ref Port, addr: int)
 {
-	m := ref TMmsg.Writecoil(Modbus->FrameRTU, addr, -1, 16r0013, 16r0000);
-	p.write(m.pack());
+	if(p != nil) {
+		p.rdlock.obtain();
+		m := ref TMmsg.Writecoil(Modbus->FrameRTU, addr, -1, 16r0013, 16r0000);
+		p.write(m.pack());
+		p.avail = nil;
+		p.mode = ModeExactus;
+		p.rdlock.release();
+	}
 }
 
 switchmodbus(p: ref Port)
@@ -514,7 +550,11 @@ switchmodbus(p: ref Port)
 		b := array[] of {
 			byte 16r02, byte 16r4d, byte 16r4d, byte 16r03,
 		};
+		p.rdlock.obtain();
 		p.write(b);
+		p.mode = ModeModbus;
+		p.avail = nil;
+		p.rdlock.release();
 	}
 }
 
