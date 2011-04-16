@@ -97,6 +97,12 @@ Exactus : module
 		Device =>
 			edegrees:	real;
 			cdegrees:	real;
+		Version =>
+			mode:	byte;
+			appid:	byte;
+			vermajor:	int;
+			verminor:	int;
+			build:	int;
 		Acknowledge =>
 			c:	byte;
 		}
@@ -174,7 +180,7 @@ Exactus : module
 	swapendian:	fn(b: array of byte): array of byte;
 
 	escape:		fn(buf: array of byte): array of byte;
-	deescape:	fn(buf: array of byte, n: int): (int, array of byte);
+	deescape:	fn(esc: byte, buf: array of byte, n: int): (int, array of byte);
 	
 	lrc:	fn(buf: array of byte): byte;
 	ieee754:	fn(b: array of byte): real;

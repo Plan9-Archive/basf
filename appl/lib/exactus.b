@@ -20,10 +20,14 @@ modbus: Modbus;
 	RMmsg, TMmsg: import modbus;
 
 stderr: ref Sys->FD;
-debug := 0;
+
+DEBUG := 1;
 
 # buffered reading channel
 BUFSZ: con 2048;
+
+SEBYTES : list of byte;
+SMBYTES : list of byte;
 
 init()
 {
@@ -40,6 +44,40 @@ init()
 	modbus->init();
 	
 	stderr = sys->fildes(2);
+
+	SEBYTES = STX :: ACK :: ERescape :: ERtemperature :: ERcurrent :: ERdual ::
+		ERdevice :: ERreserved :: nil;
+	SMBYTES =
+		byte(Modbus->Treadcoils) :: byte(Modbus->Treaddiscreteinputs) ::
+		byte(Modbus->Treadholdingregisters) :: byte(Modbus->Treadinputregisters) ::
+		byte(Modbus->Twritecoil) :: byte(Modbus->Twriteregister) ::
+		byte(Modbus->Treadexception) :: byte(Modbus->Tdiagnostics) ::
+		byte(Modbus->Tcommeventcounter) :: byte(Modbus->Tcommeventlog) ::
+		byte(Modbus->Twritecoils) :: byte(Modbus->Twriteregisters) ::
+		byte(Modbus->Tslaveid) :: byte(Modbus->Treadfilerecord) ::
+		byte(Modbus->Twritefilerecord) :: byte(Modbus->Tmaskwriteregister) ::
+		byte(Modbus->Trwregisters) :: byte(Modbus->Treadfifo) :: 
+		byte(Modbus->Tencapsulatedtransport) ::
+		byte(Modbus->Terror + Modbus->Treadcoils) ::
+		byte(Modbus->Terror + Modbus->Treaddiscreteinputs) ::
+		byte(Modbus->Terror + Modbus->Treadholdingregisters) ::
+		byte(Modbus->Terror + Modbus->Treadinputregisters) ::
+		byte(Modbus->Terror + Modbus->Twritecoil) ::
+		byte(Modbus->Terror + Modbus->Twriteregister) ::
+		byte(Modbus->Terror + Modbus->Treadexception) ::
+		byte(Modbus->Terror + Modbus->Tdiagnostics) ::
+		byte(Modbus->Terror + Modbus->Tcommeventcounter) ::
+		byte(Modbus->Terror + Modbus->Tcommeventlog) ::
+		byte(Modbus->Terror + Modbus->Twritecoils) ::
+		byte(Modbus->Terror + Modbus->Twriteregisters) ::
+		byte(Modbus->Terror + Modbus->Tslaveid) ::
+		byte(Modbus->Terror + Modbus->Treadfilerecord) ::
+		byte(Modbus->Terror + Modbus->Twritefilerecord) ::
+		byte(Modbus->Terror + Modbus->Tmaskwriteregister) ::
+		byte(Modbus->Terror + Modbus->Trwregisters) ::
+		byte(Modbus->Terror + Modbus->Treadfifo) ::
+		byte(Modbus->Terror + Modbus->Tencapsulatedtransport) ::
+	nil;
 }
 
 Port.write(p: self ref Port, b: array of byte): int
@@ -50,6 +88,7 @@ Port.write(p: self ref Port, b: array of byte): int
 		if(p.mode == ModeModbus)
 			sys->sleep(5);	# more than 3.5 char times a byte at 115.2kb
 		r = sys->write(p.data, b, len b);
+		if(DEBUG) sys->fprint(stderr, "TX -> %s\n", hexdump(b[0:r]));
 		p.wrlock.release();
 	}
 	return r;
@@ -67,14 +106,16 @@ Port.getreply(p: self ref Port): (ref ERmsg, array of byte, string)
 	p.rdlock.obtain();
 	n := len p.avail;
 	if(n > 0) {
-		# sys->fprint(stderr, "getreply: %s\n", hexdump(p.avail));
 		case p.mode {
 		ModeExactus =>
 			(o, m) := Emsg.unpack(p.avail);
 			if(m != nil) {
 				r = ref ERmsg.ExactusMsg(m);
 				b = p.avail[0:o];
-				p.avail = p.avail[o:];
+				if(n > o)
+					p.avail = p.avail[o:];
+				else
+					p.avail = nil;
 			}
 		ModeModbus =>
 			if(n >= 4) {
@@ -121,6 +162,15 @@ Port.readreply(p: self ref Port, ms: int): (ref ERmsg, array of byte, string)
 	}
 	
 	return (r, b, err);
+}
+
+pbytes(p: ref Port): array of byte
+{
+	b : array of byte;
+	p.rdlock.obtain();
+	b = p.avail;
+	p.rdlock.release();
+	return b;
 }
 
 Emsg.temperature(m: self ref Emsg): real
@@ -193,11 +243,14 @@ Emsg.text(m: self ref Emsg): string
 		Temperature =>
 			s = sys->sprint("%.3f°C", x.degrees);
 		Current =>
-			s = sys->sprint("%4e Amps", x.amps);
+			s = sys->sprint("%3e Amps", x.amps);
 		Dual =>
-			s = sys->sprint("%.3f°C %4e Amps", x.degrees, x.amps);
+			s = sys->sprint("%.3f°C %3e Amps", x.degrees, x.amps);
 		Device =>
-			s = sys->sprint("electronics=%g chassis=%g", x.edegrees, x.cdegrees);
+			s = sys->sprint("electronics=%.3f°C chassis=%.3f°", x.edegrees, x.cdegrees);
+		Version =>
+			s = sys->sprint("mode=%2X appid=%2X version=%d.%d build=%d",
+					int x.mode, int x.appid, x.vermajor, x.verminor, x.build);
 		Acknowledge =>
 			if(x.c == ACK)
 				s += "ACK";
@@ -217,30 +270,44 @@ Emsg.unpack(b: array of byte): (int, ref Emsg)
 		nb : array of byte;
 		case int b[0] {
 		int ERtemperature =>
-			(i, nb) = deescape(b[1:], 4);
-			if(nb != nil)
+			(i, nb) = deescape(ERescape, b[1:], 4);
+			if(nb != nil) {
 				m = ref Emsg.Temperature(ieee754(nb));
+				i++;
+			}
 		int ERcurrent =>
-			(i, nb) = deescape(b[1:], 4);
-			if(nb != nil)
+			(i, nb) = deescape(ERescape, b[1:], 4);
+			if(nb != nil) {
 				m = ref Emsg.Current(ieee754(nb));
+				i++;
+			}
 		int ERdual =>
-			(i, nb) = deescape(b[1:], 8);
-			if(nb != nil)
+			(i, nb) = deescape(ERescape, b[1:], 8);
+			if(nb != nil) {
 				m = ref Emsg.Dual(ieee754(nb[0:4]), ieee754(nb[4:8]));
+				i++;
+			}
 		int ERdevice =>
-			(i, nb) = deescape(b[1:], 8);
-			if(nb != nil)
+			(i, nb) = deescape(ERescape, b[1:], 8);
+			if(nb != nil) {
 				m = ref Emsg.Device(ieee754(nb[0:4]), ieee754(nb[4:8]));
+				i++;
+			}
 		int ERreserved =>
 			sys->fprint(stderr, "Reserved message attempt: %s\n", hexdump(b));
 			i = len b;
+		
+		int STX =>
+			(i, nb) = deescape(DLE, b[1:], 6);
+			if(nb != nil && i+2 <= len b) {
+				build := ((int nb[4]) << 8) | int nb[5];
+				m = ref Emsg.Version(nb[0], nb[1], int nb[2], int nb[3], build);
+				i += 2;
+			}
 		int ACK or int NAK =>
 			m = ref Emsg.Acknowledge(b[0]);
-		* =>
-			i--;
+			i++;
 		}
-		i++;
 	}
 	return (i, m);
 }
@@ -265,31 +332,37 @@ escape(buf: array of byte): array of byte
 	return nb;
 }
 
-deescape(buf: array of byte, n: int): (int, array of byte)
+deescape(esc: byte, buf: array of byte, n: int): (int, array of byte)
 {
 	nb : array of byte;
 	i := 0;
 	m := len buf;
 	if(buf != nil && m >= n) {
-		valid := 1;
+		valid := 0;
 		tmp := array[n] of { * => byte 0 };
 		j := 0;
 		for(i=0; i<m; i++) {
 			b := buf[i];
-			if(b == ERescape) {
+			if(b == esc) {
 				i++;
 				if(i>=m) {
-					valid = 0;
 					break;
 				}
 				b = buf[i];
 			}
 			tmp[j++] = b;
-			if(j == n)
+			if(j == n) {
+				valid = 1;
 				break;
+			}
 		}
-		if(valid)
+		if(valid) {
 			nb = tmp[0:j];
+			i++;
+		}
+		if(DEBUG>1){
+			sys->fprint(stderr, "  deescape: %d (%s) (%s)\n", i, hexdump(buf), hexdump(nb));
+		}
 	}
 	return (i, nb);
 }
@@ -531,6 +604,17 @@ write(p: ref Port, b: array of byte): int
 	return p.write(b);
 }
 
+flushreader(p: ref Port, ms: int)
+{
+	for(start := sys->millisec(); sys->millisec() <= start+ms;) {
+		if(pbytes(p) != nil) {
+			p.rdlock.obtain();
+			p.avail = nil;
+			p.rdlock.release();
+		} else
+			sys->sleep(5);
+	}
+}
 
 exactusmode(p: ref Port, addr: int)
 {
@@ -541,19 +625,73 @@ exactusmode(p: ref Port, addr: int)
 		p.avail = nil;
 		p.mode = ModeExactus;
 		p.rdlock.release();
+		flushreader(p, 250);
+
+		# grab version
+		b := array[] of {STX, byte 16r56, byte 16r56, ETX};
+		p.write(b);
+		(r, bytes, err) := p.readreply(1000);
+		if(DEBUG) {
+			if(err != nil)
+				sys->fprint(stderr, "Exactus mode error (%s)\n", err);			
+			if(bytes != nil)
+				sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+		}
+		(e, nil) := r.dtype();
+		if(e != nil)
+			sys->fprint(stderr, "Version: %s (%s)\n", e.text(), hexdump(b));
+			
+		# start converting
+		b = array[] of {STX, byte 16r31, byte 16r31, ETX};
+		p.write(b);
+		(r, bytes, err) = p.readreply(125);
+		if(err != nil)
+			sys->fprint(stderr, "Read error: %s\n", err);
+		if(bytes != nil)
+			sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+		(e, nil) = r.dtype();
+		if(e != nil)
+			sys->fprint(stderr, "Start conversions: %s\n", e.text());
 	}
 }
 
 modbusmode(p: ref Port)
 {
 	if(p != nil) {
-		b := array[] of {STX, byte 16r4d, byte 16r4d, ETX};
+		e : ref Emsg;
+		# stopconversion
+		b := array[] of {Exactus->STX, byte 16r30, byte 16r30, Exactus->ETX};
 		p.write(b);
-		sys->sleep(125);
+		if(DEBUG)
+			sys->fprint(stderr, "Stop conversions:\n");
+		(r, bytes, err) := p.readreply(125);
+		if(err != nil)
+			sys->fprint(stderr, "Read error: %s\n", err);
+		if(DEBUG) {
+			if(bytes != nil)
+				sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+			(e, nil) = r.dtype();
+			if(e != nil)
+				sys->fprint(stderr, "\t%s\n", e.text());
+		}
+
+		b = array[] of {STX, byte 16r4d, byte 16r4d, ETX};
+		p.write(b);
+		(r, bytes, err) = p.readreply(125);
+		if(err != nil)
+			sys->fprint(stderr, "Read error: %s\n", err);
+		if(DEBUG) {
+			if(bytes != nil)
+				sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+			(e, nil) = r.dtype();
+			if(e != nil)
+				sys->fprint(stderr, "Enter Modbus mode: %s\n", e.text());
+		}
 		p.rdlock.obtain();
-		p.mode = ModeModbus;
 		p.avail = nil;
+		p.mode = ModeModbus;
 		p.rdlock.release();
+		flushreader(p, 125);
 	}
 }
 
@@ -586,6 +724,14 @@ oldreader(p: ref Port)
 	}
 }
 
+ismember(b: byte, l: list of byte): int
+{
+	for(; l != nil; l = tl l)
+		if(b == hd l)
+			return 1;
+	return 0;
+}
+
 reader(p: ref Port)
 {
 	p.pids = sys->pctl(0, nil) :: p.pids;
@@ -597,8 +743,20 @@ reader(p: ref Port)
 	for(;;) alt {
 	b := <- c =>
 		p.rdlock.obtain();
-		if(len p.avail < Sys->ATOMICIO) {
-			n := len p.avail;
+		n := len p.avail;
+		if(n < Sys->ATOMICIO) {
+			if(n == 0) {
+				l : list of byte;
+				if(p.mode == ModeModbus)
+					l = SMBYTES;
+				else
+					l = SEBYTES;
+				if(!ismember(b, l)) {
+					sys->fprint(stderr, "Frame error (invalid start byte): %2X\n", int b);
+					p.rdlock.release();
+					continue;
+				}
+			}
 			na := array[n + 1] of byte;
 			if(n)
 				na[0:] = p.avail[0:n];
