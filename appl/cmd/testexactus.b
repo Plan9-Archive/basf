@@ -20,7 +20,7 @@ modbus: Modbus;
 	TMmsg, RMmsg: import modbus;
 
 exactus: Exactus;
-	Port, Emsg, ERmsg, Trecord: import exactus;
+	EPort, Emsg, ERmsg, Trecord: import exactus;
 
 TestExactus: module {
 	init: fn(ctxt: ref Draw->Context, argv: list of string);
@@ -28,7 +28,7 @@ TestExactus: module {
 
 stdin, stdout, stderr: ref Sys->FD;
 
-port: ref Port;
+port: ref EPort;
 
 init(nil: ref Draw->Context, argv: list of string)
 {
@@ -76,18 +76,28 @@ init(nil: ref Draw->Context, argv: list of string)
 	
 	# testdata();
 
-	if(port != nil && skip == 0)
-		testnetwork(port);
+	#if(port != nil)
+	#	testnetwork(port);
 	
-	testfile("test.bin");
+	# testfile("test.bin");
+	
+	if(port != nil) {
+		streamtest(port, 1, 0, 1000);
+		streamtest(port, 10, 1, 1000);
+		streamtest(port, 250, 0, 1000);
+		streamtest(port, 500, 0, 1000);
+		streamtest(port, 1000, 0, 1000);
+	}
 	
 	if(port != nil)
 		exactus->close(port);
 }
 
-purge(p: ref Port)
+purge(p: ref EPort, dump: int)
 {
 	p.rdlock.obtain();
+	if(dump)
+		sys->fprint(stderr, "RX <- %s (purged)\n", hexdump(p.avail));
 	p.avail = nil;
 	p.rdlock.release();
 }
@@ -177,7 +187,7 @@ testdata()
 	sys->fprint(stdout, "\tn: %.3f %.5e\n", d, a);
 }
 
-testnetwork(p: ref Exactus->Port)
+testnetwork(p: ref Exactus->EPort)
 {
 	exactus->modbusmode(p);
 	(r, bytes, err) := exactus->readreply(p, 125);
@@ -185,18 +195,18 @@ testnetwork(p: ref Exactus->Port)
 		sys->fprint(stderr, "Read error: %s\n", err);
 	if(bytes != nil)
 		sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
-	purge(p);
+	purge(p, 1);
 
 	m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1305, 16r0009);
 	r = test(p, m.pack(), "read (0x1305) Serial number (9 ASCII bytes)");
 	if(r != nil) {
 		sys->fprint(stdout, "\t%s\n", r.tostring());
 	}
-	purge(p);
+	purge(p, 1);
 	
 	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r0000, 16r0002);
-	r = test(port, m.pack(), "read (0x0000) channel 1 temperature");
-	purge(port);
+	r = test(p, m.pack(), "read (0x0000) channel 1 temperature");
+	purge(p, 1);
 	(nil, mt) := r.dtype();
 	if(mt != nil) {
 		sys->fprint(stdout, "Text: %s\n", mt.text());
@@ -223,6 +233,9 @@ testnetwork(p: ref Exactus->Port)
 	end := sys->millisec();
 	sys->fprint(stderr, "%d modbus reads in %dms (%g ms/r)\n", C, end - start,
 				real(end-start)/real C);
+
+	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1000, 16r0002);
+	r = test(port, m.pack(), "read (0x1000) configuration registers");
 	
 	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1011, 16r0001);
 	r = test(port, m.pack(), "read (0x1011) sample rate");
@@ -234,7 +247,7 @@ testnetwork(p: ref Exactus->Port)
 	texactusmode(p);
 }
 
-texactusmode(p: ref Exactus->Port)
+texactusmode(p: ref Exactus->EPort)
 {
 	sys->fprint(stdout, "\nTesting Exactus Mode:\n");
 	exactus->exactusmode(p, 1);
@@ -271,8 +284,40 @@ texactusmode(p: ref Exactus->Port)
 	if(p.avail != nil)
 		sys->fprint(stderr, "Remaining data: %s\n", hexdump(p.avail));
 	p.rdlock.release();
-
+	
 	exactus->modbusmode(p);
+}
+
+streamtest(p: ref Exactus->EPort, rate, output, ms: int)
+{
+	sys->fprint(stdout, "%dms stream test, graph rate: %0X", ms, rate);
+
+	m := ref TMmsg.Writeregister(Modbus->FrameRTU, 1, -1, 16r1011, rate);
+	p.write(m.pack());
+	
+	c := chan[16] of ref Exactus->Trecord;
+	p.tchan = c;
+	exactus->exactusmode(p, 1);
+	start := sys->millisec();
+
+	sync := chan[2] of int;
+	spawn timer(sync, ms);
+	
+	n := 0;
+	out: for(;;) alt {
+	t := <- c =>
+		n++;
+		if(output)
+			sys->fprint(stdout, "\t%d: %.3f\n", t.time, t.temp0);
+	<-sync =>
+		sys->fprint(stderr, "Stopped.\n");
+		p.tchan = nil;
+		break out;
+	}
+	end := sys->millisec();
+	
+	exactus->modbusmode(p);
+	sys->fprint(stdout, "\tcount=%d in %dms.\n", n, end-start);
 }
 
 testfile(path: string)
@@ -323,7 +368,7 @@ mdata(m: ref Modbus->RMmsg, n: int): real
 	return r;
 }
 
-test(p: ref Port, b: array of byte, s: string): ref ERmsg
+test(p: ref EPort, b: array of byte, s: string): ref ERmsg
 {
 	r : ref ERmsg;
 	if(p != nil) {
@@ -331,11 +376,11 @@ test(p: ref Port, b: array of byte, s: string): ref ERmsg
 		err : string;
 		
 		sys->fprint(stdout, "\nTest: %s\n", s);
-		start := sys->millisec();
-		n := p.write(b);
-		stop := sys->millisec();
-		sys->fprint(stderr, "TX -> %s\t(%d, %d)\n", hexdump(b), n, stop-start);
-
+#		start := sys->millisec();
+#		n := p.write(b);
+#		stop := sys->millisec();
+#		sys->fprint(stderr, "TX -> %s\t(%d, %d)\n", hexdump(b), n, stop-start);
+		p.write(b);
 		(r, bytes, err) = p.readreply(500);
 		if(err != nil)
 			sys->fprint(stderr, "Read error: %s\n", err);
@@ -359,4 +404,10 @@ hexdump(b: array of byte): string
 	}
 	
 	return str->drop(s, "\n");
+}
+
+timer(tick: chan of int, ms: int)
+{
+	sys->sleep(ms);
+	tick <-= 1;
 }

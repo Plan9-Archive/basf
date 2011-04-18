@@ -80,7 +80,7 @@ init()
 	nil;
 }
 
-Port.write(p: self ref Port, b: array of byte): int
+EPort.write(p: self ref EPort, b: array of byte): int
 {
 	r := 0;
 	if(p != nil && p.data != nil && b != nil && len b > 0) {
@@ -94,7 +94,7 @@ Port.write(p: self ref Port, b: array of byte): int
 	return r;
 }
 
-Port.getreply(p: self ref Port): (ref ERmsg, array of byte, string)
+EPort.getreply(p: self ref EPort): (ref ERmsg, array of byte, string)
 {
 	r : ref ERmsg;
 	b : array of byte;
@@ -140,7 +140,7 @@ Port.getreply(p: self ref Port): (ref ERmsg, array of byte, string)
 }
 
 # read until timeout or result is returned
-Port.readreply(p: self ref Port, ms: int): (ref ERmsg, array of byte, string)
+EPort.readreply(p: self ref EPort, ms: int): (ref ERmsg, array of byte, string)
 {
 	if(p == nil)
 		return (nil, nil, "No valid port");
@@ -164,7 +164,7 @@ Port.readreply(p: self ref Port, ms: int): (ref ERmsg, array of byte, string)
 	return (r, b, err);
 }
 
-pbytes(p: ref Port): array of byte
+pbytes(p: ref EPort): array of byte
 {
 	b : array of byte;
 	p.rdlock.obtain();
@@ -563,11 +563,12 @@ lpackr(r: real): array of byte
 
 
 
-open(path: string): ref Exactus->Port
+open(path: string): ref Exactus->EPort
 {
 	if(sys == nil) init();
 	
-	np := ref Port(ModeModbus, path, nil, nil, Semaphore.new(), Semaphore.new(), nil, nil);	
+	np := ref EPort(ModeModbus, path, nil, nil, Semaphore.new(), Semaphore.new(),
+					nil, nil, nil);	
 	openport(np);
 	if(np.data != nil);
 		reading(np);
@@ -576,7 +577,7 @@ open(path: string): ref Exactus->Port
 }
 
 # prepare device port
-openport(p: ref Port)
+openport(p: ref EPort)
 {
 	if(p==nil) {
 		raise "fail: port not initialized";
@@ -611,7 +612,7 @@ openport(p: ref Port)
 }
 
 # shut down reader (if any)
-close(p: ref Port): ref Sys->Connection
+close(p: ref EPort): ref Sys->Connection
 {
 	if(p == nil)
 		return nil;
@@ -631,17 +632,17 @@ close(p: ref Port): ref Sys->Connection
 	return c;
 }
 
-readreply(p: ref Port, ms: int): (ref ERmsg, array of byte, string)
+readreply(p: ref EPort, ms: int): (ref ERmsg, array of byte, string)
 {
 	return p.readreply(ms);
 }
 
-write(p: ref Port, b: array of byte): int
+write(p: ref EPort, b: array of byte): int
 {
 	return p.write(b);
 }
 
-flushreader(p: ref Port, ms: int)
+flushreader(p: ref EPort, ms: int)
 {
 	for(start := sys->millisec(); sys->millisec() <= start+ms;) {
 		if(pbytes(p) != nil) {
@@ -653,11 +654,22 @@ flushreader(p: ref Port, ms: int)
 	}
 }
 
-exactusmode(p: ref Port, addr: int)
+exactusmode(p: ref EPort, addr: int)
 {
 	if(p != nil) {
+		# force temperature only
+		m := ref TMmsg.Writeregister(Modbus->FrameRTU, addr, -1, 16r1000, 16r0011);
+		p.write(m.pack());
+		(r, bytes, err) := p.readreply(1000);
+		if(DEBUG) {
+			if(err != nil)
+				sys->fprint(stderr, "Exactus mode error (%s)\n", err);			
+			if(bytes != nil)
+				sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+		}
+
 		p.rdlock.obtain();
-		m := ref TMmsg.Writecoil(Modbus->FrameRTU, addr, -1, 16r0013, 16r0000);
+		m = ref TMmsg.Writecoil(Modbus->FrameRTU, addr, -1, 16r0013, 16r0000);
 		p.write(m.pack());
 		p.avail = nil;
 		p.mode = ModeExactus;
@@ -667,7 +679,7 @@ exactusmode(p: ref Port, addr: int)
 		# grab version
 		b := array[] of {STX, byte 16r56, byte 16r56, ETX};
 		p.write(b);
-		(r, bytes, err) := p.readreply(1000);
+		(r, bytes, err) = p.readreply(1000);
 		if(DEBUG) {
 			if(err != nil)
 				sys->fprint(stderr, "Exactus mode error (%s)\n", err);			
@@ -692,7 +704,7 @@ exactusmode(p: ref Port, addr: int)
 	}
 }
 
-modbusmode(p: ref Port)
+modbusmode(p: ref EPort)
 {
 	if(p != nil) {
 		e : ref Emsg;
@@ -732,13 +744,13 @@ modbusmode(p: ref Port)
 	}
 }
 
-reading(p: ref Port)
+reading(p: ref EPort)
 {
 	if(p.pids == nil)
 		spawn reader(p);
 }
 
-oldreader(p: ref Port)
+oldreader(p: ref EPort)
 {
 	p.pids = sys->pctl(0, nil) :: p.pids;
 	
@@ -769,7 +781,7 @@ ismember(b: byte, l: list of byte): int
 	return 0;
 }
 
-reader(p: ref Port)
+reader(p: ref EPort)
 {
 	p.pids = sys->pctl(0, nil) :: p.pids;
 	
@@ -789,7 +801,7 @@ reader(p: ref Port)
 				else
 					l = SEBYTES;
 				if(!ismember(b, l)) {
-					sys->fprint(stderr, "Frame error (invalid start byte): %2X\n", int b);
+					#sys->fprint(stderr, "Frame error (invalid start byte): %2X\n", int b);
 					p.rdlock.release();
 					continue;
 				}
@@ -798,6 +810,35 @@ reader(p: ref Port)
 			if(n)
 				na[0:] = p.avail[0:n];
 			na[n] = b;
+			if(p.mode == ModeExactus && p.tchan != nil) {
+				(i, m) := Emsg.unpack(na);
+				if(m != nil) {
+					t := ref Trecord(sys->millisec(), 0.0, 0.0, 0.0, 0.0, 0.0,
+									0.0, 0.0, 1.0);
+					pick x := m {
+					Temperature =>
+						t.temp0 = x.degrees;
+					Current =>
+						t.current1 = x.amps;
+					Dual =>
+						t.temp0 = x.degrees;
+						t.current1 = x.amps;
+					Device =>
+						t.etemp1 =x.edegrees;
+						t.etemp2 = x.cdegrees;
+					* =>
+						t = nil;
+					}
+					
+					if(t != nil) {
+						p.tchan <-= t;
+						if(n > i)
+							na = na[i:];
+						else
+							na = nil;
+					}
+				}
+			}
 			p.avail = na;
 		}
 		p.rdlock.release();
@@ -810,7 +851,7 @@ reader(p: ref Port)
 	}
 }
 
-bytereader(p: ref Port, c: chan of byte, e: chan of int)
+bytereader(p: ref EPort, c: chan of byte, e: chan of int)
 {
 	p.pids = sys->pctl(0, nil) :: p.pids;
 	buf := array[1] of byte;

@@ -64,7 +64,7 @@ Exactus : module
 	GR1o30,
 	GR1o60:		con byte iota;
 	
-	Port: adt
+	EPort: adt
 	{
 		mode:	int;
 
@@ -78,11 +78,12 @@ Exactus : module
 		# bytes from reader
 		avail:	array of byte;
 		pids:	list of int;
+		tchan:	chan of ref Exactus->Trecord;
 		
-		write: fn(p: self ref Port, b: array of byte): int;
+		write: fn(p: self ref EPort, b: array of byte): int;
 		
-		getreply:	fn(p: self ref Port): (ref ERmsg, array of byte, string);
-		readreply:	fn(p: self ref Port, ms: int): (ref ERmsg, array of byte, string);
+		getreply:	fn(p: self ref EPort): (ref ERmsg, array of byte, string);
+		readreply:	fn(p: self ref EPort, ms: int): (ref ERmsg, array of byte, string);
 	};
 	
 	Emsg: adt {
@@ -170,13 +171,13 @@ Exactus : module
 	
 	init:	fn();
 	
-	open:	fn(path: string): ref Exactus->Port;
-	close:		fn(p: ref Port): ref Sys->Connection;
-	readreply:	fn(p: ref Port, ms: int): (ref ERmsg, array of byte, string);
-	write: fn(p: ref Port, b: array of byte): int;
+	open:	fn(path: string): ref Exactus->EPort;
+	close:		fn(p: ref EPort): ref Sys->Connection;
+	readreply:	fn(p: ref EPort, ms: int): (ref ERmsg, array of byte, string);
+	write: fn(p: ref EPort, b: array of byte): int;
 	
-	exactusmode:	fn(p: ref Port, addr: int);
-	modbusmode: 	fn(p: ref Port);
+	exactusmode:	fn(p: ref EPort, addr: int);
+	modbusmode: 	fn(p: ref EPort);
 	
 	swapendian:	fn(b: array of byte): array of byte;
 

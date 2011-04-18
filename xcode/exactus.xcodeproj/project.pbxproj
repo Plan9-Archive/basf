@@ -13,8 +13,8 @@
 		41120B2212F8C1D900576FF7 /* module */ = {isa = PBXFileReference; lastKnownFileType = folder; name = module; path = ../module; sourceTree = "<group>"; };
 		4153D8F81345176B005EED5F /* mkfile */ = {isa = PBXFileReference; explicitFileType = sourcecode.make; fileEncoding = 4; path = mkfile; sourceTree = "<group>"; };
 		4153D8FB13451DC0005EED5F /* mkfile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mkfile; sourceTree = "<group>"; };
-		4153D8FC13451DC0005EED5F /* testexactus.b */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.limbo; path = testexactus.b; sourceTree = "<group>"; };
-		4153D90013451DC0005EED5F /* exactus.b */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.limbo; path = exactus.b; sourceTree = "<group>"; };
+		4153D8FC13451DC0005EED5F /* testexactus.b */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.limbo; lineEnding = 0; path = testexactus.b; sourceTree = "<group>"; };
+		4153D90013451DC0005EED5F /* exactus.b */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.limbo; lineEnding = 0; path = exactus.b; sourceTree = "<group>"; };
 		4153D90313451DC0005EED5F /* mkfile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mkfile; sourceTree = "<group>"; };
 		4153D90413451DC0005EED5F /* mkfile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mkfile; sourceTree = "<group>"; };
 /* End PBXFileReference section */
