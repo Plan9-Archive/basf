@@ -79,6 +79,8 @@ init(nil: ref Draw->Context, argv: list of string)
 	if(port != nil && skip == 0)
 		testnetwork(port);
 	
+	testfile("test.bin");
+	
 	if(port != nil)
 		exactus->close(port);
 }
@@ -272,6 +274,43 @@ texactusmode(p: ref Exactus->Port)
 
 	exactus->modbusmode(p);
 }
+
+testfile(path: string)
+{
+	sys->fprint(stdout, "Reading '%s'\n", path);
+	fd := sys->open(path, Sys->OREAD);
+	if(fd != nil) {
+		n := 20;
+		buf := array[36] of byte;
+		records := array[n] of ref Trecord;
+		i := 0;
+		while((sys->read(fd, buf, len buf) > 0) && (i++ < n)) {
+			(nil, t) := Trecord.unpack(buf);
+			if(t != nil) {
+				records[i-1] = t;
+				sys->fprint(stdout, "Trecord: %0.3f\n", real t.time/1000.0);
+				sys->fprint(stdout, "\ttemp0: %.3f\n", t.temp0);
+				sys->fprint(stdout, "\ttemp1: %.3f\n", t.temp1);
+				sys->fprint(stdout, "\ttemp2: %.3f\n", t.temp2);
+				sys->fprint(stdout, "\tcurr1: %.5e\n", t.current1);
+				sys->fprint(stdout, "\tcurr2: %.5e\n", t.current2);
+				sys->fprint(stdout, "\tetemp1: %.3f\n", t.etemp1);
+				sys->fprint(stdout, "\tetemp2: %.3f\n", t.etemp2);
+				sys->fprint(stdout, "\temissivity: %g\n", t.emissivity);
+			}
+		}
+		wfd := sys->create(path+"_", Sys->OWRITE, 8r664);
+		if(wfd != nil) {
+			for(i = 0; i < len records; i++) {
+				b := records[i].pack();
+				sys->write(wfd, b, len b);
+			}
+		}
+	} else
+		sys->fprint(stderr, "Failed to open '%s'\n", path);
+}
+
+# utils
 
 mdata(m: ref Modbus->RMmsg, n: int): real
 {

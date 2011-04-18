@@ -475,18 +475,18 @@ Trecord.pack(t: self ref Trecord): array of byte
 	b := array[36] of { * => byte 0};
 	v : array of byte;
 	# timestamp
-	v = i2b(int t.time);
-	b[0] = v[0];
-	b[1] = v[1];
-	b[2] = v[2];
-	b[3] = v[3];
+	p32(b, 0, t.time);
+#	v = i2b(t.time);
+#	b[0] = v[0];
+#	b[1] = v[1];
+#	b[2] = v[2];
+#	b[3] = v[3];
 	# temperature 0
 	v = lpackr(t.temp0);
 	b[4] = v[0];
 	b[5] = v[1];
 	b[6] = v[2];
 	b[7] = v[3];
-	if(0) {						# no need to archive the rest
 	# temperature 1
 	v = lpackr(t.temp1);
 	b[8] = v[0];
@@ -529,7 +529,7 @@ Trecord.pack(t: self ref Trecord): array of byte
 	b[33] = v[1];
 	b[34] = v[2];
 	b[35] = v[3];
-	}
+	
 	return b;
 }
 
@@ -538,9 +538,18 @@ Trecord.unpack(b: array of byte): (int, ref Trecord)
 	if(len b < 36)
 		return (0, nil);
 	
-	t : ref Trecord;
-	n := 0;
-	return (n, t);
+	t := ref Trecord;
+	t.time = g32(b, 0);
+	t.temp0 = ieee754(swapendian(b[4:8]));
+	t.temp1 = ieee754(swapendian(b[8:12]));
+	t.temp2 = ieee754(swapendian(b[12:16]));
+	t.current1 = ieee754(swapendian(b[16:20]));
+	t.current2 = ieee754(swapendian(b[20:24]));
+	t.etemp1 = ieee754(swapendian(b[24:28]));
+	t.etemp2 = ieee754(swapendian(b[28:32]));
+	t.emissivity = ieee754(swapendian(b[32:36]));
+	
+	return (36, t);
 }
 
 lpackr(r: real): array of byte
