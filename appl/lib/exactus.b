@@ -442,6 +442,34 @@ ERmsg.dtype(t: self ref ERmsg): (ref Emsg, ref Modbus->RMmsg)
 	return (e, m);
 }
 
+ERmsg.tostring(t: self ref ERmsg): string
+{
+	s : string;
+	if(t != nil) {
+		(e, m) := t.dtype();
+		if(e != nil) {
+			sys->fprint(stderr, "tostring unfinished\n");
+		}
+		if(m != nil) {
+			pick x := m {
+			Readholdingregisters =>
+				d := x.data;
+				n := len d;
+				b := array[n] of { * => byte 0};
+				j := 0;
+				for(i := 0; i < n; i=i+2) {
+					c := d[i+1];
+					if(c == byte 0 || c > byte 16r7f)
+						break;
+					b[j++] = c;
+				}
+				s = string b;
+			}
+		}
+	}
+	return s;
+}
+
 Trecord.pack(t: self ref Trecord): array of byte
 {
 	b := array[36] of { * => byte 0};

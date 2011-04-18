@@ -187,31 +187,15 @@ testnetwork(p: ref Exactus->Port)
 
 	m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1305, 16r0009);
 	r = test(p, m.pack(), "read (0x1305) Serial number (9 ASCII bytes)");
-	purge(p);
-	(nil, mt) := r.dtype();
-	if(mt != nil) {
-		sys->fprint(stdout, "Text: %s\n", mt.text());
-		pick x := mt {
-		Readholdingregisters =>
-			d := x.data;
-			n := len d;
-			sys->fprint(stdout, "\t%d %d\n%s\n", n, int d[1], hexdump(d));
-			s := array[n] of { * => byte 0};
-			j := 0;
-			for(i := 0; i < n; i=i+2) {
-				c := d[i+1];
-				if(c == byte 0 || c > byte 16r7f)
-					break;
-				s[j++] = c;
-			}
-			sys->fprint(stdout, "\t%s\n", string s);
-		}
+	if(r != nil) {
+		sys->fprint(stdout, "\t%s\n", r.tostring());
 	}
+	purge(p);
 	
 	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r0000, 16r0002);
 	r = test(port, m.pack(), "read (0x0000) channel 1 temperature");
 	purge(port);
-	(nil, mt) = r.dtype();
+	(nil, mt) := r.dtype();
 	if(mt != nil) {
 		sys->fprint(stdout, "Text: %s\n", mt.text());
 		sys->fprint(stdout, "\t%g\n", mdata(mt, 0));
@@ -265,20 +249,20 @@ texactusmode(p: ref Exactus->Port)
 	for(i := 0; i < 100; i++) {
 		(r, bytes, err) = exactus->readreply(p, 125);
 		if(r != nil || bytes != nil || err != nil) {
-			sys->fprint(stderr, "%3d: ", i);
+			sys->fprint(stdout, "%3d: ", i);
 			if(bytes != nil)
-				sys->fprint(stderr, "\t %2X %s", int bytes[0], hexdump(bytes[1:]));			
+				sys->fprint(stdout, "\t %2X %s", int bytes[0], hexdump(bytes[1:]));			
 			if(err != nil)
-				sys->fprint(stderr, "\t%s", err);
+				sys->fprint(stdout, "\t%s", err);
 			if(r != nil)
 				(e, nil) = r.dtype();
 				if(e != nil)
-					sys->fprint(stderr, "\t%s", e.text());
-			sys->fprint(stderr, "\n");
+					sys->fprint(stdout, "\t%s", e.text());
+			sys->fprint(stdout, "\n");
 		}
 	}
 	end := sys->millisec();
-	sys->fprint(stderr, "%d exactus reads in %dms (%g ms/r)\n", 100, end - start,
+	sys->fprint(stdout, "%d exactus reads in %dms (%g ms/r)\n", 100, end - start,
 				real(end-start)/real 100);
 
 	p.rdlock.obtain();

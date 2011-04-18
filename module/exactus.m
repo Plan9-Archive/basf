@@ -149,6 +149,7 @@ Exactus : module
 		pack:	fn(nil: self ref ERmsg): array of byte;
 		
 		dtype:	fn(nil: self ref ERmsg): (ref Emsg, ref Modbus->RMmsg);
+		tostring:	fn(nil: self ref ERmsg): string;
 	};
 	
 	# TemperaSure binary data record
