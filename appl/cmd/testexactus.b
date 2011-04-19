@@ -27,8 +27,7 @@ TestExactus: module {
 };
 
 stdin, stdout, stderr: ref Sys->FD;
-
-port: ref EPort;
+debug := 0;
 
 init(nil: ref Draw->Context, argv: list of string)
 {
@@ -55,9 +54,10 @@ init(nil: ref Draw->Context, argv: list of string)
 	
 	arg := load Arg Arg->PATH;
 	arg->init(argv);
-	arg->setusage(arg->progname()+" [-s] [path]");
+	arg->setusage(arg->progname()+" [-d] [-s] [path]");
 	while((c := arg->opt()) != 0)
 		case c {
+		'd' =>	debug++;
 		's' =>	skip++;
 		* =>	arg->usage();
 		}
@@ -66,6 +66,10 @@ init(nil: ref Draw->Context, argv: list of string)
 	if(argv != nil)
 		path = hd argv;
 	
+	if(debug)
+		exactus->debug(debug);
+	
+	port: ref EPort;
 	if(path != nil && skip == 0) {
 		port = exactus->open(path);
 		if(port.ctl == nil || port.data == nil) {
@@ -76,11 +80,9 @@ init(nil: ref Draw->Context, argv: list of string)
 	
 	# testdata();
 
-	#if(port != nil)
-	#	testnetwork(port);
-	
-	# testfile("test.bin");
-	
+	if(port != nil)
+		testnetwork(port);
+		
 	if(port != nil) {
 		streamtest(port, 1, 0, 1000);
 		streamtest(port, 10, 1, 1000);
@@ -91,12 +93,14 @@ init(nil: ref Draw->Context, argv: list of string)
 	
 	if(port != nil)
 		exactus->close(port);
+
+	# testfile("test.bin");
 }
 
 purge(p: ref EPort, dump: int)
 {
 	p.rdlock.obtain();
-	if(dump)
+	if(dump && debug)
 		sys->fprint(stderr, "RX <- %s (purged)\n", hexdump(p.avail));
 	p.avail = nil;
 	p.rdlock.release();
@@ -142,36 +146,38 @@ testdata()
 	
 	sys->fprint(stdout, "Test Exactus temperature: 674.05 C\n");
 	b = array[] of {byte 16r81, byte 16r44, byte 16r28, byte 16r80, byte 16r83, byte 0};
-	sys->fprint(stderr, "%s\n", hexdump(b));
+	if(debug) sys->fprint(stderr, "%s\n", hexdump(b));
 	(nil, tb) := exactus->deescape(Exactus->ERescape, b[1:], 4);
-	sys->fprint(stderr, "%s\n", hexdump(tb));
-	sys->fprint(stderr, "%s\n", hexdump(exactus->escape(tb)));
+	if(debug) {
+		sys->fprint(stderr, "%s\n", hexdump(tb));
+		sys->fprint(stderr, "%s\n", hexdump(exactus->escape(tb)));
+	}
 	sys->fprint(stdout, "\t%g\n", exactus->ieee754(tb));
 	
 	(n, m) := Emsg.unpack(b);
 	sys->fprint(stdout, "Temperature Emsg.unpack(): %s\n", hexdump(b));
-	sys->fprint(stderr, "\tdegrees: %g\n", m.temperature());
+	sys->fprint(stdout, "\tdegrees: %g\n", m.temperature());
 
 	b = array[] of {byte 16r82, byte 16r2C, byte 16r5A, byte 16r4E, byte 16r12};
 	(n, m) = Emsg.unpack(b);
 	sys->fprint(stdout, "Current Emsg.unpack(): %s\n", hexdump(b));
-	sys->fprint(stderr, "\tamps: %g\n", m.current());
+	sys->fprint(stdout, "\tamps: %g\n", m.current());
 	
 	b = array[] of {byte 16r83, byte 16r44, byte 16r28, byte 16r4D, byte 16r71,
 					byte 16r35, byte 16r75, byte 16rF9, byte 16r08};
 	(n, m) = Emsg.unpack(b);
 	sys->fprint(stdout, "Dual Emsg.unpack(): %s\n", hexdump(b));
 	(d, a) := m.dual();
-	sys->fprint(stderr, "\tdegrees: %g\n", d);
-	sys->fprint(stderr, "\tamps: %g\n", a);
+	sys->fprint(stdout, "\tdegrees: %g\n", d);
+	sys->fprint(stdout, "\tamps: %g\n", a);
 
 	b = array[] of {byte 16r84, byte 16r41, byte 16rE3, byte 16r33, byte 16r33,
 					byte 16r41, byte 16rFC, byte 16r00, byte 16r00};
 	(n, m) = Emsg.unpack(b);
 	sys->fprint(stdout, "Device Emsg.unpack(): %s\n", hexdump(b));
 	(d, a) = m.device();
-	sys->fprint(stderr, "\telectronics: %g\n", d);
-	sys->fprint(stderr, "\tchassis: %g\n", a);
+	sys->fprint(stdout, "\telectronics: %g\n", d);
+	sys->fprint(stdout, "\tchassis: %g\n", a);
 	
 	b = array[] of {Exactus->ACK, byte 16r83, byte 16r44, byte 16r28, byte 16r4D,
 					byte 16r71, byte 16r35, byte 16r75, byte 16rF9, byte 16r08};
@@ -191,20 +197,29 @@ testnetwork(p: ref Exactus->EPort)
 {
 	exactus->modbusmode(p);
 	(r, bytes, err) := exactus->readreply(p, 125);
-	if(err != nil)
+	if(err != nil && debug)
 		sys->fprint(stderr, "Read error: %s\n", err);
-	if(bytes != nil)
+	if(bytes != nil && debug)
 		sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
 	purge(p, 1);
 
-	m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1305, 16r0009);
+	# graph rate
+	exactus->debug(debug-1);
+	sys->fprint(stdout, "Graph rate: %d\n", exactus->graphrate(p));
+	
+	sys->fprint(stdout, "Set graph rate: 10\n");
+	exactus->set_graphrate(p, 10);
+	sys->fprint(stdout, "Graph rate: %d\n", exactus->graphrate(p));
+	exactus->debug(debug);
+
+	m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, p.maddr, -1, 16r1305, 16r0009);
 	r = test(p, m.pack(), "read (0x1305) Serial number (9 ASCII bytes)");
 	if(r != nil) {
 		sys->fprint(stdout, "\t%s\n", r.tostring());
 	}
 	purge(p, 1);
 	
-	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r0000, 16r0002);
+	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, p.maddr, -1, 16r0000, 16r0002);
 	r = test(p, m.pack(), "read (0x0000) channel 1 temperature");
 	purge(p, 1);
 	(nil, mt) := r.dtype();
@@ -217,12 +232,12 @@ testnetwork(p: ref Exactus->EPort)
 	C := 20;
 	start := sys->millisec();
 	for(i := 0; i < C; i++) {
-		m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r0004, 16r0004);
-		port.write(m.pack());
-		(r, bytes, err) = port.readreply(125);
-		if(err != nil)
+		m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, p.maddr, -1, 16r0004, 16r0004);
+		p.write(m.pack());
+		(r, bytes, err) = p.readreply(125);
+		if(err != nil && debug)
 			sys->fprint(stderr, "Read error: %s\n", err);
-		if(bytes != nil)
+		if(bytes != nil && debug)
 			sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
 		ms := sys->millisec();
 		(nil, mt) = r.dtype();
@@ -231,18 +246,19 @@ testnetwork(p: ref Exactus->EPort)
 						mdata(mt, 4), mdata(mt, 0));
 	}
 	end := sys->millisec();
-	sys->fprint(stderr, "%d modbus reads in %dms (%g ms/r)\n", C, end - start,
+	sys->fprint(stdout, "%d modbus reads in %dms (%g ms/r)\n", C, end-start,
 				real(end-start)/real C);
 
-	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1000, 16r0002);
-	r = test(port, m.pack(), "read (0x1000) configuration registers");
+	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, p.maddr, -1, 16r1000, 16r0002);
+	r = test(p, m.pack(), "read (0x1000) configuration registers");
 	
 	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1011, 16r0001);
-	r = test(port, m.pack(), "read (0x1011) sample rate");
+	r = test(p, m.pack(), "read (0x1011) sample rate");
 
-	port.rdlock.obtain();
-	sys->fprint(stderr, "Remaining data: %s\n", hexdump(port.avail));
-	port.rdlock.release();
+	p.rdlock.obtain();
+	if(debug)
+		sys->fprint(stderr, "Remaining data: %s\n", hexdump(p.avail));
+	p.rdlock.release();
 
 	texactusmode(p);
 }
@@ -250,15 +266,15 @@ testnetwork(p: ref Exactus->EPort)
 texactusmode(p: ref Exactus->EPort)
 {
 	sys->fprint(stdout, "\nTesting Exactus Mode:\n");
-	exactus->exactusmode(p, 1);
+	exactus->exactusmode(p);
 	(r, bytes, err) := exactus->readreply(p, 125);
-	if(err != nil)
+	if(err != nil && debug)
 		sys->fprint(stderr, "Read error: %s\n", err);
-	if(bytes != nil)
+	if(bytes != nil && debug)
 		sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
 	(e, nil) := r.dtype();
 	if(e != nil)
-		sys->fprint(stderr, "\t%s\n", e.text());
+		sys->fprint(stdout, "\t%s\n", e.text());
 
 	start := sys->millisec();
 	for(i := 0; i < 100; i++) {
@@ -281,7 +297,7 @@ texactusmode(p: ref Exactus->EPort)
 				real(end-start)/real 100);
 
 	p.rdlock.obtain();
-	if(p.avail != nil)
+	if(p.avail != nil && debug)
 		sys->fprint(stderr, "Remaining data: %s\n", hexdump(p.avail));
 	p.rdlock.release();
 	
@@ -290,14 +306,14 @@ texactusmode(p: ref Exactus->EPort)
 
 streamtest(p: ref Exactus->EPort, rate, output, ms: int)
 {
-	sys->fprint(stdout, "%dms stream test, graph rate: %0X", ms, rate);
+	sys->fprint(stdout, "Stream test, graph rate: %d", rate);
 
 	m := ref TMmsg.Writeregister(Modbus->FrameRTU, 1, -1, 16r1011, rate);
 	p.write(m.pack());
 	
 	c := chan[16] of ref Exactus->Trecord;
 	p.tchan = c;
-	exactus->exactusmode(p, 1);
+	exactus->exactusmode(p);
 	start := sys->millisec();
 
 	sync := chan[2] of int;
@@ -310,7 +326,6 @@ streamtest(p: ref Exactus->EPort, rate, output, ms: int)
 		if(output)
 			sys->fprint(stdout, "\t%d: %.3f\n", t.time, t.temp0);
 	<-sync =>
-		sys->fprint(stderr, "Stopped.\n");
 		p.tchan = nil;
 		break out;
 	}
@@ -382,11 +397,11 @@ test(p: ref EPort, b: array of byte, s: string): ref ERmsg
 #		sys->fprint(stderr, "TX -> %s\t(%d, %d)\n", hexdump(b), n, stop-start);
 		p.write(b);
 		(r, bytes, err) = p.readreply(500);
-		if(err != nil)
+		if(err != nil && debug)
 			sys->fprint(stderr, "Read error: %s\n", err);
-		if(bytes != nil)
+		if(bytes != nil && debug)
 			sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
-		if(r != nil) {
+		if(r != nil && debug) {
 			buf := r.pack();
 			sys->fprint(stderr, "reply: %s\n", hexdump(buf));
 		}

@@ -42,32 +42,13 @@ Exactus : module
 	ECstart,
 	ECsetcal,
 	ECmax:	con 48+iota;
-	
-	# Exactus mode graph rate
-	GR1000,
-	GR500,
-	GR200,
-	GR100,
-	GR50,
-	GR20,
-	GR10,
-	GR8,
-	GR6,
-	GR5,
-	GR4,
-	GR3,
-	GR2,
-	GR1,
-	GR0d5,
-	GR0d2,
-	GR0d1,
-	GR1o30,
-	GR1o60:		con byte iota;
-	
+		
 	EPort: adt
 	{
 		mode:	int;
 
+		maddr:	int;					# Modbus address
+		
 		path:	string;
 		ctl:	ref Sys->FD;
 		data:	ref Sys->FD;
@@ -170,13 +151,14 @@ Exactus : module
 	};
 	
 	init:	fn();
+	debug:	fn(f: int);
 	
 	open:	fn(path: string): ref Exactus->EPort;
 	close:		fn(p: ref EPort): ref Sys->Connection;
 	readreply:	fn(p: ref EPort, ms: int): (ref ERmsg, array of byte, string);
 	write: fn(p: ref EPort, b: array of byte): int;
 	
-	exactusmode:	fn(p: ref EPort, addr: int);
+	exactusmode:	fn(p: ref EPort);
 	modbusmode: 	fn(p: ref EPort);
 	
 	swapendian:	fn(b: array of byte): array of byte;
@@ -186,4 +168,7 @@ Exactus : module
 	
 	lrc:	fn(buf: array of byte): byte;
 	ieee754:	fn(b: array of byte): real;
+	
+	graphrate:	fn(p: ref EPort): int;
+	set_graphrate:	fn(p: ref EPort, r: int);
 };

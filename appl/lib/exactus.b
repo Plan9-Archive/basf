@@ -21,7 +21,7 @@ modbus: Modbus;
 
 stderr: ref Sys->FD;
 
-DEBUG := 1;
+DEBUG := 0;
 
 # buffered reading channel
 BUFSZ: con 2048;
@@ -78,6 +78,11 @@ init()
 		byte(Modbus->Terror + Modbus->Treadfifo) ::
 		byte(Modbus->Terror + Modbus->Tencapsulatedtransport) ::
 	nil;
+}
+
+debug(f: int)
+{
+	DEBUG = f;
 }
 
 EPort.write(p: self ref EPort, b: array of byte): int
@@ -567,7 +572,7 @@ open(path: string): ref Exactus->EPort
 {
 	if(sys == nil) init();
 	
-	np := ref EPort(ModeModbus, path, nil, nil, Semaphore.new(), Semaphore.new(),
+	np := ref EPort(ModeModbus, 1, path, nil, nil, Semaphore.new(), Semaphore.new(),
 					nil, nil, nil);	
 	openport(np);
 	if(np.data != nil);
@@ -654,11 +659,11 @@ flushreader(p: ref EPort, ms: int)
 	}
 }
 
-exactusmode(p: ref EPort, addr: int)
+exactusmode(p: ref EPort)
 {
 	if(p != nil) {
 		# force temperature only
-		m := ref TMmsg.Writeregister(Modbus->FrameRTU, addr, -1, 16r1000, 16r0011);
+		m := ref TMmsg.Writeregister(Modbus->FrameRTU, p.maddr, -1, 16r1000, 16r0011);
 		p.write(m.pack());
 		(r, bytes, err) := p.readreply(1000);
 		if(DEBUG) {
@@ -669,7 +674,7 @@ exactusmode(p: ref EPort, addr: int)
 		}
 
 		p.rdlock.obtain();
-		m = ref TMmsg.Writecoil(Modbus->FrameRTU, addr, -1, 16r0013, 16r0000);
+		m = ref TMmsg.Writecoil(Modbus->FrameRTU, p.maddr, -1, 16r0013, 16r0000);
 		p.write(m.pack());
 		p.avail = nil;
 		p.mode = ModeExactus;
@@ -687,7 +692,7 @@ exactusmode(p: ref EPort, addr: int)
 				sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
 		}
 		(e, nil) := r.dtype();
-		if(e != nil)
+		if(e != nil && DEBUG)
 			sys->fprint(stderr, "Version: %s (%s)\n", e.text(), hexdump(b));
 			
 		# start converting
@@ -696,10 +701,10 @@ exactusmode(p: ref EPort, addr: int)
 		(r, bytes, err) = p.readreply(125);
 		if(err != nil)
 			sys->fprint(stderr, "Read error: %s\n", err);
-		if(bytes != nil)
+		if(bytes != nil && DEBUG)
 			sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
 		(e, nil) = r.dtype();
-		if(e != nil)
+		if(e != nil && DEBUG)
 			sys->fprint(stderr, "Start conversions: %s\n", e.text());
 	}
 }
@@ -885,6 +890,60 @@ ieee754(b: array of byte): real
 	return r;
 }
 
+graphrate(p: ref EPort): int
+{
+	if(p == nil)
+		return -1;
+	
+	rate := -1;
+	change := 0;
+	if(p.mode == ModeExactus) {
+		change = 1;
+		modbusmode(p);
+		p.readreply(125);		# throw it away
+	}
+	
+	m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1011, 1);
+	p.write(m.pack());
+	(r, bytes, err) := p.readreply(125);
+	if(bytes != nil)
+		sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+	(nil, mt) := r.dtype();
+	if(mt != nil) {
+		pick x := mt {
+		Readinputregisters or
+		Readholdingregisters =>
+			rate = g16(x.data, 0);
+		}
+	}
+	
+	if(change) {
+		exactusmode(p);
+	}
+	
+	return rate;
+}
+
+set_graphrate(p: ref EPort, r: int)
+{
+	if(p == nil)
+		return;
+
+	change := 0;
+	if(p.mode == ModeExactus) {
+		change = 1;
+		modbusmode(p);
+		p.readreply(125);		# throw it away
+	}
+
+	m := ref TMmsg.Writeregister(Modbus->FrameRTU, p.maddr, -1, 16r1011, 10);
+	p.write(m.pack());
+	p.readreply(125);		# throw it away
+
+	if(change)
+		exactusmode(p);
+}
+
 # support fn
 swapendian(b: array of byte): array of byte
 {
@@ -939,6 +998,19 @@ kill(pid: int)
 	fd := sys->open("#p/"+string pid+"/ctl", Sys->OWRITE);
 	if(fd == nil || sys->fprint(fd, "kill") < 0)
 		sys->fprint(stderr, "exactus: can't kill %d: %r\n", pid);
+}
+
+
+p16(a: array of byte, o: int, v: int): int
+{
+	a[o] = byte v;
+	a[o+1] = byte (v>>8);
+	return o+BIT16SZ;
+}
+
+g16(f: array of byte, i: int): int
+{
+	return ((int f[i]) << 8) | int f[i+1];
 }
 
 g32(f: array of byte, i: int): int
