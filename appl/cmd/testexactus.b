@@ -204,7 +204,7 @@ testnetwork(p: ref Exactus->EPort)
 	purge(p, 1);
 
 	# graph rate
-	exactus->debug(debug-1);
+	exactus->debug(debug+1);
 	sys->fprint(stdout, "Graph rate: %d\n", exactus->graphrate(p));
 	
 	sys->fprint(stdout, "Set graph rate: 10\n");
@@ -219,6 +219,8 @@ testnetwork(p: ref Exactus->EPort)
 	}
 	purge(p, 1);
 	
+	sys->fprint(stdout, "Serial number: %s\n", exactus->serialnumber(p));
+	
 	m = ref TMmsg.Readholdingregisters(Modbus->FrameRTU, p.maddr, -1, 16r0000, 16r0002);
 	r = test(p, m.pack(), "read (0x0000) channel 1 temperature");
 	purge(p, 1);
@@ -227,6 +229,7 @@ testnetwork(p: ref Exactus->EPort)
 		sys->fprint(stdout, "Text: %s\n", mt.text());
 		sys->fprint(stdout, "\t%g\n", mdata(mt, 0));
 	}
+	sys->fprint(stdout, "Temperature: %.2f°C\n", exactus->temperature(p));
 
 	sys->fprint(stdout, "\nTesting Modbus Mode:\n");
 	C := 20;

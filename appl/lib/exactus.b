@@ -670,7 +670,7 @@ exactusmode(p: ref EPort)
 			if(err != nil)
 				sys->fprint(stderr, "Exactus mode error (%s)\n", err);			
 			if(bytes != nil)
-				sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+				dumpreceive(bytes);
 		}
 
 		p.rdlock.obtain();
@@ -689,7 +689,7 @@ exactusmode(p: ref EPort)
 			if(err != nil)
 				sys->fprint(stderr, "Exactus mode error (%s)\n", err);			
 			if(bytes != nil)
-				sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+				dumpreceive(bytes);
 		}
 		(e, nil) := r.dtype();
 		if(e != nil && DEBUG)
@@ -702,7 +702,7 @@ exactusmode(p: ref EPort)
 		if(err != nil)
 			sys->fprint(stderr, "Read error: %s\n", err);
 		if(bytes != nil && DEBUG)
-			sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+			dumpreceive(bytes);
 		(e, nil) = r.dtype();
 		if(e != nil && DEBUG)
 			sys->fprint(stderr, "Start conversions: %s\n", e.text());
@@ -723,7 +723,7 @@ modbusmode(p: ref EPort)
 			sys->fprint(stderr, "Read error: %s\n", err);
 		if(DEBUG) {
 			if(bytes != nil)
-				sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+				dumpreceive(bytes);
 			(e, nil) = r.dtype();
 			if(e != nil)
 				sys->fprint(stderr, "\t%s\n", e.text());
@@ -736,7 +736,7 @@ modbusmode(p: ref EPort)
 			sys->fprint(stderr, "Read error: %s\n", err);
 		if(DEBUG) {
 			if(bytes != nil)
-				sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+				dumpreceive(bytes);
 			(e, nil) = r.dtype();
 			if(e != nil)
 				sys->fprint(stderr, "Enter Modbus mode: %s\n", e.text());
@@ -905,9 +905,9 @@ graphrate(p: ref EPort): int
 	
 	m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1011, 1);
 	p.write(m.pack());
-	(r, bytes, err) := p.readreply(125);
-	if(bytes != nil)
-		sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+	(r, bytes, nil) := p.readreply(125);
+	if(bytes != nil && DEBUG)
+		dumpreceive(bytes);
 	(nil, mt) := r.dtype();
 	if(mt != nil) {
 		pick x := mt {
@@ -936,7 +936,7 @@ set_graphrate(p: ref EPort, r: int)
 		p.readreply(125);		# throw it away
 	}
 
-	m := ref TMmsg.Writeregister(Modbus->FrameRTU, p.maddr, -1, 16r1011, 10);
+	m := ref TMmsg.Writeregister(Modbus->FrameRTU, p.maddr, -1, 16r1011, r);
 	p.write(m.pack());
 	p.readreply(125);		# throw it away
 
@@ -944,7 +944,73 @@ set_graphrate(p: ref EPort, r: int)
 		exactusmode(p);
 }
 
+serialnumber(p: ref EPort): string
+{
+	if(p == nil)
+		return nil;
+	
+	change := 0;
+	if(p.mode == ModeExactus) {
+		change = 1;
+		modbusmode(p);
+		p.readreply(125);		# throw away
+	}
+
+	s := "";
+	m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, p.maddr, -1, 16r1305, 16r0009);
+	p.write(m.pack());
+	(r, bytes, nil) := p.readreply(125);
+	if(bytes != nil && DEBUG)
+		dumpreceive(bytes);
+	if(r != nil)
+		s = r.tostring();
+
+	if(change)
+		exactusmode(p);
+	
+	return s;
+}
+
+temperature(p: ref EPort): real
+{
+	if(p == nil)
+		return -1.0;
+	
+	change := 0;
+	if(p.mode == ModeExactus) {
+		change = 1;
+		modbusmode(p);
+		p.readreply(125);		# throw away
+	}
+	
+	degc := 0.0;
+	m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, p.maddr, -1, 16r0000, 16r0002);
+	p.write(m.pack());
+	(r, bytes, nil) := p.readreply(125);
+	if(bytes != nil && DEBUG)
+		dumpreceive(bytes);
+	if(r != nil) {
+		(nil, mt) := r.dtype();
+		if(mt != nil)
+			pick x := mt {
+			Readholdingregisters =>
+				if(len x.data >= 4)
+					degc = ieee754(x.data[0:4]);
+			}
+	}
+
+	if(change)
+		exactusmode(p);
+	
+	return degc;
+}
+
 # support fn
+dumpreceive(bytes: array of byte)
+{
+	sys->fprint(stderr, "RX <- %s\n", hexdump(bytes));
+}
+
 swapendian(b: array of byte): array of byte
 {
 	nb : array of byte;

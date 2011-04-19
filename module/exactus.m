@@ -171,4 +171,8 @@ Exactus : module
 	
 	graphrate:	fn(p: ref EPort): int;
 	set_graphrate:	fn(p: ref EPort, r: int);
+	
+	# Modbus mode queries
+	serialnumber:	fn(p: ref EPort): string;
+	temperature:	fn(p: ref EPort): real;
 };
