@@ -481,11 +481,6 @@ Trecord.pack(t: self ref Trecord): array of byte
 	v : array of byte;
 	# timestamp
 	p32(b, 0, t.time);
-#	v = i2b(t.time);
-#	b[0] = v[0];
-#	b[1] = v[1];
-#	b[2] = v[2];
-#	b[3] = v[3];
 	# temperature 0
 	v = lpackr(t.temp0);
 	b[4] = v[0];
