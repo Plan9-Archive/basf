@@ -150,6 +150,18 @@ Exactus : module
 		unpack: fn(b: array of byte): (int, ref Trecord);
 	};
 	
+	# TemperaSure Data file format
+	Tdatafile: adt {
+		name:	string;
+		count:	int;		# should be unsigned 32-bit
+		startTime:	string;	# YYYY-MM-DD HR:mm:ss
+		IsDataDwl:	int;
+		dataVersion:	int;	# 3
+		tempValid:	int;
+		currentValid:	int;
+		serial:	string;
+	};
+	
 	init:	fn();
 	debug:	fn(f: int);
 	
