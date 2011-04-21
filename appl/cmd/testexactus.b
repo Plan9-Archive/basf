@@ -94,7 +94,7 @@ init(nil: ref Draw->Context, argv: list of string)
 	if(port != nil)
 		exactus->close(port);
 
-	# testfile("test.bin");
+	testfile("test.bin");
 }
 
 purge(p: ref EPort, dump: int)
@@ -351,7 +351,7 @@ testfile(path: string)
 			(nil, t) := Trecord.unpack(buf);
 			if(t != nil) {
 				records[i-1] = t;
-				sys->fprint(stdout, "Trecord: %0.3f\n", real t.time/1000.0);
+				sys->fprint(stdout, "Trecord: %d\n", t.time);
 				sys->fprint(stdout, "\ttemp0: %.3f\n", t.temp0);
 				sys->fprint(stdout, "\ttemp1: %.3f\n", t.temp1);
 				sys->fprint(stdout, "\ttemp2: %.3f\n", t.temp2);

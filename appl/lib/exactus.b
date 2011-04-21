@@ -816,9 +816,10 @@ reader(p: ref EPort)
 				na[0:] = p.avail[0:n];
 			na[n] = b;
 			if(p.mode == ModeExactus && p.tchan != nil) {
+				ms := sys->millisec();
 				(i, m) := Emsg.unpack(na);
 				if(m != nil) {
-					t := ref Trecord(sys->millisec(), 0.0, 0.0, 0.0, 0.0, 0.0,
+					t := ref Trecord(ms, 0.0, 0.0, 0.0, 0.0, 0.0,
 									0.0, 0.0, 1.0);
 					pick x := m {
 					Temperature =>
