@@ -567,8 +567,8 @@ open(path: string): ref Exactus->EPort
 {
 	if(sys == nil) init();
 	
-	np := ref EPort(ModeModbus, 1, path, nil, nil, Semaphore.new(), Semaphore.new(),
-					nil, nil, nil);	
+	np := ref EPort(ModeModbus, 1, 0.0, path, nil, nil,
+					Semaphore.new(), Semaphore.new(), nil, nil, nil);	
 	openport(np);
 	if(np.data != nil);
 		reading(np);
@@ -750,29 +750,6 @@ reading(p: ref EPort)
 		spawn reader(p);
 }
 
-oldreader(p: ref EPort)
-{
-	p.pids = sys->pctl(0, nil) :: p.pids;
-	
-	buf := array[1] of byte;
-	for(;;) {
-		while((n := sys->read(p.data, buf, len buf)) > 0) {
-			p.rdlock.obtain();
-			if(len p.avail < Sys->ATOMICIO) {
-				na := array[len p.avail + n] of byte;
-				if(len p.avail)
-					na[0:] = p.avail[0:];
-				na[len p.avail:] = buf[0:n];
-				p.avail = na;
-			}
-			p.rdlock.release();
-		}
-		sys->fprint(stderr, "Exactus reader closed, trying again.\n");
-		p.data = nil;
-		p.ctl = nil;
-	}
-}
-
 ismember(b: byte, l: list of byte): int
 {
 	for(; l != nil; l = tl l)
@@ -819,10 +796,12 @@ reader(p: ref EPort)
 					pick x := m {
 					Temperature =>
 						t.temp0 = x.degrees;
+						p.temp = x.degrees;
 					Current =>
 						t.current1 = x.amps;
 					Dual =>
 						t.temp0 = x.degrees;
+						p.temp = x.degrees;
 						t.current1 = x.amps;
 					Device =>
 						t.etemp1 =x.edegrees;
@@ -844,7 +823,7 @@ reader(p: ref EPort)
 		}
 		p.rdlock.release();
 	<-e =>
-		sys->fprint(stderr, "Exactus reader closed, trying again.\n");
+		# sys->fprint(stderr, "Exactus reader closed, trying again.\n");
 		p.data = nil;
 		p.ctl = nil;
 		openport(p);
@@ -972,33 +951,42 @@ temperature(p: ref EPort): real
 	if(p == nil)
 		return -1.0;
 	
-	change := 0;
-	if(p.mode == ModeExactus) {
-		change = 1;
-		modbusmode(p);
-		p.readreply(125);		# throw away
+	r : ref ERmsg;
+	if(p.mode == ModeModbus) {
+		bytes: array of byte;
+		m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, p.maddr, -1,
+					16r0000, 16r0002);
+		p.write(m.pack());
+		(r, bytes, nil) = p.readreply(125);
+		if(bytes != nil && DEBUG)
+			dumpreceive(bytes);
+		if(r != nil) {
+			(nil, mt) := r.dtype();
+			if(mt != nil)
+				pick x := mt {
+				Readholdingregisters =>
+					if(len x.data >= 4)
+						p.temp = ieee754(x.data[0:4]);
+				}
+		}
 	}
 	
-	degc := 0.0;
-	m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, p.maddr, -1, 16r0000, 16r0002);
-	p.write(m.pack());
-	(r, bytes, nil) := p.readreply(125);
-	if(bytes != nil && DEBUG)
-		dumpreceive(bytes);
-	if(r != nil) {
-		(nil, mt) := r.dtype();
-		if(mt != nil)
-			pick x := mt {
-			Readholdingregisters =>
-				if(len x.data >= 4)
-					degc = ieee754(x.data[0:4]);
+	if(p.mode == ModeExactus && p.tchan == nil) {
+		do {
+			(r, nil, nil) = p.readreply(125);
+			if(r != nil) {
+				(m, nil) := r.dtype();
+				if(m != nil) {
+					pick x := m {
+					Temperature =>
+						p.temp = x.degrees;
+					}
+				}
 			}
+		} while(r != nil);
 	}
-
-	if(change)
-		exactusmode(p);
-	
-	return degc;
+		
+	return p.temp;
 }
 
 # support fn

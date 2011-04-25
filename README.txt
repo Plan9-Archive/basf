@@ -1,6 +1,6 @@
 # status
 
-Under development.
+Useful for Modbus and Exactus mode data acquisition.
 
 # intro
 

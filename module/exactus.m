@@ -45,9 +45,9 @@ Exactus : module
 		
 	EPort: adt
 	{
-		mode:	int;
-
+		mode:	int;					# Exactus or Modbus
 		maddr:	int;					# Modbus address
+		temp:	real;					# Last measured temperature
 		
 		path:	string;
 		ctl:	ref Sys->FD;
