@@ -47,7 +47,9 @@ Exactus : module
 	{
 		mode:	int;					# Exactus or Modbus
 		maddr:	int;					# Modbus address
+		
 		temp:	real;					# Last measured temperature
+		rate:	int;					# Graph rate
 		
 		path:	string;
 		ctl:	ref Sys->FD;
