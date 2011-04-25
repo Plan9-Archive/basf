@@ -619,7 +619,8 @@ close(p: ref EPort): ref Sys->Connection
 
 	if(p.data == nil)
 		return nil;
-		
+	
+	modbusmode(p);
 	hangup := array[] of {byte "hangup"};
 	sys->write(p.ctl, hangup, len hangup);
 	c := ref sys->Connection(p.data, p.ctl, nil);
