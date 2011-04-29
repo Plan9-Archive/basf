@@ -57,12 +57,14 @@ Exactus : module
 		
 		rdlock: ref Lock->Semaphore;
 		wrlock: ref Lock->Semaphore;		
-		
+				
 		# bytes from reader
 		avail:	array of byte;
 		pids:	list of int;
 		tchan:	chan of ref Exactus->Trecord;
 		
+		ms:		int;					# ms start of last packet
+
 		write: fn(p: self ref EPort, b: array of byte): int;
 		
 		getreply:	fn(p: self ref EPort): (ref ERmsg, array of byte, string);

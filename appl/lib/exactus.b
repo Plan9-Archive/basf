@@ -568,7 +568,7 @@ open(path: string): ref Exactus->EPort
 	if(sys == nil) init();
 	
 	np := ref EPort(ModeModbus, 1, 0.0, -1, path, nil, nil,
-					Semaphore.new(), Semaphore.new(), nil, nil, nil);	
+					Semaphore.new(), Semaphore.new(), nil, nil, nil, 0);	
 	openport(np);
 	if(np.data != nil) {
 		m := ref TMmsg.Readholdingregisters(Modbus->FrameRTU, 1, -1, 16r1011, 1);
@@ -780,16 +780,14 @@ reader(p: ref EPort)
 	c := chan[BUFSZ] of byte;
 	e := chan of int;
 	spawn bytereader(p, c, e);
-	
-	ms := 0;
-	
+		
 	for(;;) alt {
 	b := <- c =>
 		p.rdlock.obtain();
 		n := len p.avail;
 		if(n < Sys->ATOMICIO) {
 			if(n == 0) {
-				ms = sys->millisec();		# used in Trecord, track first byte
+				p.ms = sys->millisec();		# used in Trecord, track first byte
 				l : list of byte;
 				if(p.mode == ModeModbus)
 					l = SMBYTES;
@@ -808,7 +806,7 @@ reader(p: ref EPort)
 			if(p.mode == ModeExactus && p.tchan != nil) {
 				(i, m) := Emsg.unpack(na);
 				if(m != nil) {
-					t := ref Trecord(ms, 0.0, 0.0, 0.0, 0.0, 0.0,
+					t := ref Trecord(p.ms, 0.0, 0.0, 0.0, 0.0, 0.0,
 									0.0, 0.0, 1.0);
 					pick x := m {
 					Temperature =>
