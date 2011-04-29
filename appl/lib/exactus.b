@@ -24,7 +24,7 @@ stderr: ref Sys->FD;
 DEBUG := 0;
 
 # buffered reading channel
-BUFSZ: con 2048;
+BUFSZ: con 1024;
 
 SEBYTES : list of byte;
 SMBYTES : list of byte;
@@ -92,7 +92,10 @@ EPort.write(p: self ref EPort, b: array of byte): int
 		p.wrlock.obtain();
 		if(p.mode == ModeModbus)
 			sys->sleep(5);	# more than 3.5 char times a byte at 115.2kb
-		r = sys->write(p.data, b, len b);
+		fd := p.data;
+		if(p.wdata != nil)
+			fd = p.wdata;
+		r = sys->write(fd, b, len b);
 		if(DEBUG) sys->fprint(stderr, "TX -> %s\n", hexdump(b[0:r]));
 		p.wrlock.release();
 	}
@@ -567,7 +570,7 @@ open(path: string): ref Exactus->EPort
 {
 	if(sys == nil) init();
 	
-	np := ref EPort(ModeModbus, 1, 0.0, -1, path, nil, nil,
+	np := ref EPort(ModeModbus, 1, 0.0, -1, path, nil, nil, nil,
 					Semaphore.new(), Semaphore.new(), nil, nil, nil, 0);	
 	openport(np);
 	if(np.data != nil) {
@@ -597,10 +600,7 @@ openport(p: ref EPort)
 		raise "fail: port not initialized";
 		return;
 	}
-	
-	p.data = nil;
-	p.ctl = nil;
-	
+		
 	if(p.path != nil) {
 		if(str->in('!', p.path)) {
 			(ok, net) := sys->dial(p.path, nil);
@@ -613,9 +613,9 @@ openport(p: ref EPort)
 			p.data = sys->open(net.dir+"/data", Sys->ORDWR);
 		} else {
 			p.ctl = sys->open(p.path+"ctl", Sys->ORDWR);
-			p.data = sys->open(p.path, Sys->ORDWR);
-			b := array[] of { byte "b115200" };
-			sys->write(p.ctl, b, len b);
+			p.data = sys->open(p.path, Sys->OREAD);
+			p.wdata = sys->open(p.path, Sys->OWRITE);
+			sys->seek(p.data, big 0, Sys->SEEKEND);
 		}
 	}
 	if(p.ctl == nil || p.data == nil) {
@@ -640,6 +640,7 @@ close(p: ref EPort): ref Sys->Connection
 	c := ref sys->Connection(p.data, p.ctl, nil);
 	p.ctl = nil;
 	p.data = nil;
+	p.wdata = nil;
 	
 	for(; p.pids != nil; p.pids = tl p.pids)
 		kill(hd p.pids);
@@ -773,6 +774,7 @@ ismember(b: byte, l: list of byte): int
 	return 0;
 }
 
+ms := 0;
 reader(p: ref EPort)
 {
 	p.pids = sys->pctl(0, nil) :: p.pids;
@@ -787,7 +789,7 @@ reader(p: ref EPort)
 		n := len p.buffer;
 		if(n < Sys->ATOMICIO) {
 			if(n == 0) {
-				p.ms = sys->millisec();		# used in Trecord, track first byte
+				p.ms = ms;		# used in Trecord, track first byte
 				l : list of byte;
 				if(p.mode == ModeModbus)
 					l = SMBYTES;
@@ -840,6 +842,7 @@ reader(p: ref EPort)
 	<-e =>
 		# sys->fprint(stderr, "Exactus reader closed, trying again.\n");
 		p.data = nil;
+		p.wdata = nil;
 		p.ctl = nil;
 		openport(p);
 		spawn bytereader(p, c, e);
@@ -850,8 +853,10 @@ bytereader(p: ref EPort, c: chan of byte, e: chan of int)
 {
 	p.pids = sys->pctl(0, nil) :: p.pids;
 	buf := array[1] of byte;
-	while(sys->read(p.data, buf, len buf) > 0)
+	while(sys->read(p.data, buf, len buf) > 0) {
+		ms = sys->millisec();
 		c <-= buf[0];
+	}
 	e <-= 0;
 }
 

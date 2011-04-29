@@ -54,6 +54,7 @@ Exactus : module
 		path:	string;
 		ctl:	ref Sys->FD;
 		data:	ref Sys->FD;
+		wdata:	ref Sys->FD;
 		
 		rdlock: ref Lock->Semaphore;
 		wrlock: ref Lock->Semaphore;		
