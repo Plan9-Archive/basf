@@ -101,8 +101,8 @@ purge(p: ref EPort, dump: int)
 {
 	p.rdlock.obtain();
 	if(dump && debug)
-		sys->fprint(stderr, "RX <- %s (purged)\n", hexdump(p.avail));
-	p.avail = nil;
+		sys->fprint(stderr, "RX <- %s (purged)\n", hexdump(p.buffer));
+	p.buffer = nil;
 	p.rdlock.release();
 }
 
@@ -260,7 +260,7 @@ testnetwork(p: ref Exactus->EPort)
 
 	p.rdlock.obtain();
 	if(debug)
-		sys->fprint(stderr, "Remaining data: %s\n", hexdump(p.avail));
+		sys->fprint(stderr, "Remaining data: %s\n", hexdump(p.buffer));
 	p.rdlock.release();
 
 	texactusmode(p);
@@ -300,8 +300,8 @@ texactusmode(p: ref Exactus->EPort)
 				real(end-start)/real 100);
 
 	p.rdlock.obtain();
-	if(p.avail != nil && debug)
-		sys->fprint(stderr, "Remaining data: %s\n", hexdump(p.avail));
+	if(p.buffer != nil && debug)
+		sys->fprint(stderr, "Remaining data: %s\n", hexdump(p.buffer));
 	p.rdlock.release();
 	
 	exactus->modbusmode(p);

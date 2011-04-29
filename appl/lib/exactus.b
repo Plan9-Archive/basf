@@ -109,22 +109,22 @@ EPort.getreply(p: self ref EPort): (ref ERmsg, array of byte, string)
 		return (r, b, "No valid port");
 	
 	p.rdlock.obtain();
-	n := len p.avail;
+	n := len p.buffer;
 	if(n > 0) {
 		case p.mode {
 		ModeExactus =>
-			(o, m) := Emsg.unpack(p.avail);
+			(o, m) := Emsg.unpack(p.buffer);
 			if(m != nil) {
 				r = ref ERmsg.ExactusMsg(m);
-				b = p.avail[0:o];
+				b = p.buffer[0:o];
 				if(n > o)
-					p.avail = p.avail[o:];
+					p.buffer = p.buffer[o:];
 				else
-					p.avail = nil;
+					p.buffer = nil;
 			}
 		ModeModbus =>
 			if(n >= 4) {
-				(o, m) := RMmsg.unpack(p.avail, Modbus->FrameRTU);
+				(o, m) := RMmsg.unpack(p.buffer, Modbus->FrameRTU);
 				if(m != nil) {
 					pick x := m {
 					Readerror =>
@@ -133,8 +133,8 @@ EPort.getreply(p: self ref EPort): (ref ERmsg, array of byte, string)
 					* =>
 						r = ref ERmsg.ModbusMsg(m);
 					}
-					b = p.avail[0:o];
-					p.avail = p.avail[o:];
+					b = p.buffer[0:o];
+					p.buffer = p.buffer[o:];
 				}
 			}
 		}
@@ -173,7 +173,7 @@ pbytes(p: ref EPort): array of byte
 {
 	b : array of byte;
 	p.rdlock.obtain();
-	b = p.avail;
+	b = p.buffer;
 	p.rdlock.release();
 	return b;
 }
@@ -662,7 +662,7 @@ flushreader(p: ref EPort, ms: int)
 	for(start := sys->millisec(); sys->millisec() <= start+ms;) {
 		if(pbytes(p) != nil) {
 			p.rdlock.obtain();
-			p.avail = nil;
+			p.buffer = nil;
 			p.rdlock.release();
 		} else
 			sys->sleep(5);
@@ -686,7 +686,7 @@ exactusmode(p: ref EPort)
 		p.rdlock.obtain();
 		m = ref TMmsg.Writecoil(Modbus->FrameRTU, p.maddr, -1, 16r0013, 16r0000);
 		p.write(m.pack());
-		p.avail = nil;
+		p.buffer = nil;
 		p.mode = ModeExactus;
 		p.rdlock.release();
 		flushreader(p, 250);
@@ -752,7 +752,7 @@ modbusmode(p: ref EPort)
 				sys->fprint(stderr, "Enter Modbus mode: %s\n", e.text());
 		}
 		p.rdlock.obtain();
-		p.avail = nil;
+		p.buffer = nil;
 		p.mode = ModeModbus;
 		p.rdlock.release();
 		flushreader(p, 125);
@@ -784,7 +784,7 @@ reader(p: ref EPort)
 	for(;;) alt {
 	b := <- c =>
 		p.rdlock.obtain();
-		n := len p.avail;
+		n := len p.buffer;
 		if(n < Sys->ATOMICIO) {
 			if(n == 0) {
 				p.ms = sys->millisec();		# used in Trecord, track first byte
@@ -801,7 +801,7 @@ reader(p: ref EPort)
 			}
 			na := array[n + 1] of byte;
 			if(n)
-				na[0:] = p.avail[0:n];
+				na[0:] = p.buffer[0:n];
 			na[n] = b;
 			if(p.mode == ModeExactus && p.tchan != nil) {
 				(i, m) := Emsg.unpack(na);
@@ -834,7 +834,7 @@ reader(p: ref EPort)
 					}
 				}
 			}
-			p.avail = na;
+			p.buffer = na;
 		}
 		p.rdlock.release();
 	<-e =>

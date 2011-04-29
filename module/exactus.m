@@ -59,7 +59,8 @@ Exactus : module
 		wrlock: ref Lock->Semaphore;		
 				
 		# bytes from reader
-		avail:	array of byte;
+		buffer:	array of byte;
+		
 		pids:	list of int;
 		tchan:	chan of ref Exactus->Trecord;
 		
