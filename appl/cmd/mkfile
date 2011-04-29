@@ -3,6 +3,7 @@
 DIRS=\
 
 TARG=\
+	dumpbin.dis\
 
 TESTTARG=\
 	testexactus.dis\
@@ -18,3 +19,6 @@ DISBIN=$ROOT/dis/basf
 <$ROOT/mkfiles/mkdis
 
 all:V:	$TARG $TESTTARG
+
+dirs:V:
+	mkdir $DISBIN

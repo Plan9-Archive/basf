@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		410B70E1136B1BC40076ABC9 /* dumpbin.b */ = {isa = PBXFileReference; fileEncoding = 4; path = dumpbin.b; sourceTree = "<group>"; };
 		41120B1C12F8C07300576FF7 /* mkconfig */ = {isa = PBXFileReference; explicitFileType = sourcecode.make; fileEncoding = 4; name = mkconfig; path = ../mkconfig; sourceTree = "<group>"; };
 		41120B1D12F8C07300576FF7 /* mkfile */ = {isa = PBXFileReference; explicitFileType = sourcecode.make; fileEncoding = 4; name = mkfile; path = ../mkfile; sourceTree = "<group>"; };
 		41120B1E12F8C07300576FF7 /* README.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = README.txt; path = ../README.txt; sourceTree = "<group>"; };
@@ -57,6 +58,7 @@
 			children = (
 				4153D8FB13451DC0005EED5F /* mkfile */,
 				4153D8FC13451DC0005EED5F /* testexactus.b */,
+				410B70E1136B1BC40076ABC9 /* dumpbin.b */,
 			);
 			path = cmd;
 			sourceTree = "<group>";
