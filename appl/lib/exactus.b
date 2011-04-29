@@ -781,12 +781,15 @@ reader(p: ref EPort)
 	e := chan of int;
 	spawn bytereader(p, c, e);
 	
+	ms := 0;
+	
 	for(;;) alt {
 	b := <- c =>
 		p.rdlock.obtain();
 		n := len p.avail;
 		if(n < Sys->ATOMICIO) {
 			if(n == 0) {
+				ms = sys->millisec();		# used in Trecord, track first byte
 				l : list of byte;
 				if(p.mode == ModeModbus)
 					l = SMBYTES;
@@ -803,7 +806,6 @@ reader(p: ref EPort)
 				na[0:] = p.avail[0:n];
 			na[n] = b;
 			if(p.mode == ModeExactus && p.tchan != nil) {
-				ms := sys->millisec();
 				(i, m) := Emsg.unpack(na);
 				if(m != nil) {
 					t := ref Trecord(ms, 0.0, 0.0, 0.0, 0.0, 0.0,
