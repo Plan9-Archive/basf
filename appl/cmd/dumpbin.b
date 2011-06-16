@@ -2,6 +2,7 @@ implement DumpBin;
 
 include "sys.m";
 include "draw.m";
+include "arg.m";
 include "lock.m";
 include "string.m";
 
@@ -21,7 +22,7 @@ DumpBin: module {
 stdout, stderr: ref Sys->FD;
 debug := 0;
 
-init(nil: ref Draw->Context, args: list of string)
+init(nil: ref Draw->Context, argv: list of string)
 {
 	sys = load Sys Sys->PATH;
 	stdout = sys->fildes(1);
@@ -31,7 +32,18 @@ init(nil: ref Draw->Context, args: list of string)
 	exactus = load Exactus Exactus->PATH;
 	exactus->init();
 	
-	args = tl args;
+	all := 0;
+
+	arg := load Arg Arg->PATH;
+	arg->init(argv);
+	arg->setusage(arg->progname() + " [-a] [-] [file...]");
+	while((c := arg->opt()) != 0)
+		case c {
+		'a' =>	all++;
+		* => arg->usage();
+		}
+
+	args := arg->argv();
 	if(args == nil)
 		args = "-" :: nil;
 	
@@ -43,13 +55,13 @@ init(nil: ref Draw->Context, args: list of string)
 				sys->fprint(sys->fildes(2), "dumpbin: cannot open %s: %r\n", file);
 				raise "fail:bad open";
 			}
-			dump(fd, file);
+			dump(fd, all, file);
 		} else
-			dump(sys->fildes(0), "<stdin>");
+			dump(sys->fildes(0), all, "<stdin>");
 	}
 }
 
-dump(fd: ref Sys->FD, file: string)
+dump(fd: ref Sys->FD, all: int, file: string)
 {
 	buf := array[36] of byte;
 	while((n := sys->read(fd, buf, len buf)) > 0) {
@@ -57,10 +69,14 @@ dump(fd: ref Sys->FD, file: string)
 			sys->fprint(sys->fildes(2), "dumpbin: last record too short: %d\n", n);
 		(nil, t) := Trecord.unpack(buf);
 		if(t != nil) {
-			sys->fprint(stdout,
-				"%d\t%.3f\t%.5e\t%.3f\t%.04f\t%.04f\t%.04f\t%.05f\t%.05f\n",
-				t.time, t.temp0, t.temp1, t.temp2, t.current1, t.current2,
-				t.etemp1, t.etemp2, t.emissivity);
+			if(all) {
+				sys->fprint(stdout,
+				 "%d\t%.3f\t%.5e\t%.3f\t%.04f\t%.04f\t%.04f\t%.05f\t%.05f\n",
+				 t.time, t.temp0, t.temp1, t.temp2, t.current1, t.current2,
+				 t.etemp1, t.etemp2, t.emissivity);
+			} else {
+				sys->fprint(stdout, "%d\t%.3f\n", t.time, t.temp0);
+			}
 		} else
 			sys->fprint(stderr, "error unpacking: %s\n", hexdump(buf));
 	}
