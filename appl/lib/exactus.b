@@ -796,7 +796,8 @@ reader(p: ref EPort)
 				else
 					l = SEBYTES;
 				if(!ismember(b, l)) {
-					#sys->fprint(stderr, "Frame error (invalid start byte): %2X\n", int b);
+					if(DEBUG)
+						sys->fprint(stderr, "Frame error (invalid start byte): %2X\n", int b);
 					p.rdlock.release();
 					continue;
 				}
@@ -840,7 +841,8 @@ reader(p: ref EPort)
 		}
 		p.rdlock.release();
 	<-e =>
-		# sys->fprint(stderr, "Exactus reader closed, trying again.\n");
+		if(DEBUG)
+			sys->fprint(stderr, "Exactus reader closed, trying again.\n");
 		p.data = nil;
 		p.wdata = nil;
 		p.ctl = nil;
