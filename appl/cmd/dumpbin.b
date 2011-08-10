@@ -22,6 +22,8 @@ DumpBin: module {
 stdout, stderr: ref Sys->FD;
 debug := 0;
 
+outfile : string;
+
 init(nil: ref Draw->Context, argv: list of string)
 {
 	sys = load Sys Sys->PATH;
@@ -36,10 +38,11 @@ init(nil: ref Draw->Context, argv: list of string)
 
 	arg := load Arg Arg->PATH;
 	arg->init(argv);
-	arg->setusage(arg->progname() + " [-a] [-] [file...]");
+	arg->setusage(arg->progname() + " [-a] [-o file] [-] [file...]");
 	while((c := arg->opt()) != 0)
 		case c {
 		'a' =>	all++;
+		'o' => outfile = arg->earg();
 		* => arg->usage();
 		}
 
@@ -64,18 +67,26 @@ init(nil: ref Draw->Context, argv: list of string)
 dump(fd: ref Sys->FD, all: int, file: string)
 {
 	buf := array[36] of byte;
+	
+	ofd := stdout;
+	if(outfile != nil) {
+		ofd = sys->create(outfile, sys->OWRITE, 8r664);
+		if(ofd == nil)
+			ofd = stderr;
+	}
+	
 	while((n := sys->read(fd, buf, len buf)) > 0) {
 		if(n < len buf)
 			sys->fprint(sys->fildes(2), "dumpbin: last record too short: %d\n", n);
 		(nil, t) := Trecord.unpack(buf);
 		if(t != nil) {
 			if(all) {
-				sys->fprint(stdout,
+				sys->fprint(ofd,
 				 "%d\t%.3f\t%.5e\t%.3f\t%.04f\t%.04f\t%.04f\t%.05f\t%.05f\n",
 				 t.time, t.temp0, t.temp1, t.temp2, t.current1, t.current2,
 				 t.etemp1, t.etemp2, t.emissivity);
 			} else {
-				sys->fprint(stdout, "%d\t%.3f\n", t.time, t.temp0);
+				sys->fprint(ofd, "%d\t%.3f\n", t.time, t.temp0);
 			}
 		} else
 			sys->fprint(stderr, "error unpacking: %s\n", hexdump(buf));
