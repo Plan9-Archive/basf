@@ -774,17 +774,16 @@ ismember(b: byte, l: list of byte): int
 	return 0;
 }
 
-ms := 0;
 reader(p: ref EPort)
 {
 	p.pids = sys->pctl(0, nil) :: p.pids;
 	
-	c := chan[BUFSZ] of byte;
+	c := chan[BUFSZ] of (int, byte);
 	e := chan of int;
 	spawn bytereader(p, c, e);
 		
 	for(;;) alt {
-	b := <- c =>
+	(ms, b) := <- c =>
 		p.rdlock.obtain();
 		n := len p.buffer;
 		if(n < Sys->ATOMICIO) {
@@ -851,13 +850,12 @@ reader(p: ref EPort)
 	}
 }
 
-bytereader(p: ref EPort, c: chan of byte, e: chan of int)
+bytereader(p: ref EPort, c: chan of (int, byte), e: chan of int)
 {
 	p.pids = sys->pctl(0, nil) :: p.pids;
 	buf := array[1] of byte;
 	while(sys->read(p.data, buf, len buf) > 0) {
-		ms = sys->millisec();
-		c <-= buf[0];
+		c <-= (sys->millisec(), buf[0]);
 	}
 	e <-= 0;
 }
