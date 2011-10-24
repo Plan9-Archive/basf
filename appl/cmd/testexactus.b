@@ -78,7 +78,7 @@ init(nil: ref Draw->Context, argv: list of string)
 		}
 	}
 	
-	# testdata();
+	testdata();
 
 	if(port != nil)
 		testnetwork(port);

@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		410B70E1136B1BC40076ABC9 /* dumpbin.b */ = {isa = PBXFileReference; fileEncoding = 4; path = dumpbin.b; sourceTree = "<group>"; };
+		410B70E1136B1BC40076ABC9 /* dumpbin.b */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = dumpbin.b; sourceTree = "<group>"; };
 		41120B1C12F8C07300576FF7 /* mkconfig */ = {isa = PBXFileReference; explicitFileType = sourcecode.make; fileEncoding = 4; name = mkconfig; path = ../mkconfig; sourceTree = "<group>"; };
 		41120B1D12F8C07300576FF7 /* mkfile */ = {isa = PBXFileReference; explicitFileType = sourcecode.make; fileEncoding = 4; name = mkfile; path = ../mkfile; sourceTree = "<group>"; };
 		41120B1E12F8C07300576FF7 /* README.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = README.txt; path = ../README.txt; sourceTree = "<group>"; };
@@ -18,12 +18,14 @@
 		4153D90013451DC0005EED5F /* exactus.b */ = {isa = PBXFileReference; explicitFileType = sourcecode.c; fileEncoding = 4; lineEnding = 0; path = exactus.b; sourceTree = "<group>"; };
 		4153D90313451DC0005EED5F /* mkfile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mkfile; sourceTree = "<group>"; };
 		4153D90413451DC0005EED5F /* mkfile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mkfile; sourceTree = "<group>"; };
+		41B6C9601455B87E004F364F /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE.txt; path = ../LICENSE.txt; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
 		41120B0812F8BF8200576FF7 = {
 			isa = PBXGroup;
 			children = (
+				41B6C9601455B87E004F364F /* LICENSE.txt */,
 				4153D8F913451DC0005EED5F /* appl */,
 				4153D8F71345176B005EED5F /* man */,
 				41120B2212F8C1D900576FF7 /* module */,
@@ -94,6 +96,9 @@
 /* Begin PBXProject section */
 		41120B0A12F8BF8200576FF7 /* Project object */ = {
 			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0420;
+			};
 			buildConfigurationList = 41120B0D12F8BF8200576FF7 /* Build configuration list for PBXProject "exactus" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = English;
